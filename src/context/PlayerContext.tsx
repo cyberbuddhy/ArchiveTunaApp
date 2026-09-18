@@ -4,6 +4,7 @@ import { recordListen } from "../services/storage";
 import { getStoredPlayerSettings, savePlayerSettings, PlayerSettings } from "../services/playerSettings";
 import { audioEngine } from "../services/audioEngine";
 import { offlineCache } from "../services/offlineCache";
+import { isNativePlatform, showNowPlaying, updatePlayingState, ensureNativeControlsListener } from "../services/nativeAudio";
 import { fetchAlbumDetails } from "../services/api";
 
 export type RepeatMode = "off" | "all" | "one";
@@ -726,7 +727,33 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (err) {
       console.warn("MediaSession initialization bypassed:", err);
     }
+
+    // Native lockscreen notification + foreground service (Android APK only)
+    if (currentTrack && isNativePlatform()) {
+      void showNowPlaying({ track: currentTrack, album: currentAlbum, isPlaying: stateRef.current.isPlaying });
+    }
   }, [currentTrack, currentAlbum]);
+
+  // Native: push play/pause state to the notification + attach controls once
+  const nativeControlsRef = useRef({ togglePlay, nextTrack, prevTrack });
+  nativeControlsRef.current = { togglePlay, nextTrack, prevTrack };
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    void ensureNativeControlsListener({
+      onPlay: () => nativeControlsRef.current.togglePlay(),
+      onPause: () => {
+        if (stateRef.current.isPlaying) nativeControlsRef.current.togglePlay();
+      },
+      onNext: () => nativeControlsRef.current.nextTrack(),
+      onPrev: () => nativeControlsRef.current.prevTrack(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    void updatePlayingState(isPlaying, stateRef.current.currentTime);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying]);
 
   // Global player keyboard shortcuts (Space/K: play/pause, J: prev, L: next, Left/Right: seek, Up/Down: volume, M: mute, S: shuffle, R: repeat)
   useEffect(() => {
