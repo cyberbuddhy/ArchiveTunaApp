@@ -1,0 +1,6 @@
+{
+  "name": "ArchiveTuna",
+  "description": "Capture music albums and tracks from Archive.org and free streaming platforms, organize private collections and playlists, export/import backups, and discover music based on listening history.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
