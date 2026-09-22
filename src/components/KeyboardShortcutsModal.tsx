@@ -18,7 +18,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       icon: <Compass className="w-4 h-4 text-emerald-400" />,
       shortcuts: [
         { key: "1", label: "Search & Browse Archive" },
-        { key: "2", label: "Discover & AI Recommendations" },
+        { key: "2", label: "Discover & Recommendations" },
         { key: "3", label: "My Music Vault & Playlists" },
         { key: "/", label: "Jump to Search Input from anywhere" },
         { key: "Esc", label: "Close modal / unfocus search (keybindings work when search is unfocused)" },

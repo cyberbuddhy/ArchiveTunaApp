@@ -1,7 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   ChevronRight,
-  ChevronDown,
   Play,
   Plus,
   Check,
@@ -23,7 +22,6 @@ import { GENRE_HIERARCHY, GenreNode } from "../data/genreHierarchy";
 import { Album, SearchCollectionType, SearchEraType } from "../types";
 import { searchArchive, fetchAlbumDetails } from "../services/api";
 import { usePlayer } from "../context/PlayerContext";
-import { TabHeader } from "./TabHeader";
 
 interface DiscoverViewProps {
   onCaptureAlbum: (album: Album) => void;
@@ -42,12 +40,9 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
 
   // Hierarchy drill-down path: [Rock] -> [Psychedelic Rock] -> [Neo-Psychedelia]
   const [genrePath, setGenrePath] = useState<GenreNode[]>([]);
-
-  // Dropdown expansion state for space-saving
-  const [isGenreDropdownOpen, setIsGenreDropdownOpen] = useState(false);
-  const [genreSearch, setGenreSearch] = useState("");
-  // Drill-down path inside the dropdown explorer (e.g. Rock -> Psychedelic Rock)
+  // Drill-down path inside the explorer (e.g. Rock -> Psychedelic Rock)
   const [dropdownPath, setDropdownPath] = useState<GenreNode[]>([]);
+  const [genreSearch, setGenreSearch] = useState("");
 
   // Current node inside dropdown explorer
   const currentDropdownNode: GenreNode | null =
@@ -179,13 +174,10 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
     }
   };
 
-  const handleSelectFullPath = (path: GenreNode[], shouldCloseDropdown = true) => {
+  const handleSelectFullPath = (path: GenreNode[]) => {
     if (path.length === 0) return;
     setGenrePath(path);
     setGenreSearch("");
-    if (shouldCloseDropdown) {
-      setIsGenreDropdownOpen(false);
-    }
     const targetNode = path[path.length - 1];
     const fullPathLabel = `Featured Archival Classics • ${path.map((n) => n.name).join(" → ")}`;
     loadRecordings(targetNode.query, fullPathLabel);
@@ -199,29 +191,27 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
     handleSelectFullPath(item.path);
   };
 
-  const handleSelectSubgenre = (node: GenreNode, shouldCloseDropdown = true) => {
+  const handleSelectSubgenre = (node: GenreNode) => {
     const newPath = [...genrePath, node];
-    handleSelectFullPath(newPath, shouldCloseDropdown);
+    handleSelectFullPath(newPath);
   };
 
   const handleJumpToBreadcrumb = (index: number) => {
     if (index < 0) {
-      // Jump to root - reset genre and hide featured classics
+      // Jump to root — back to featured classics, the tab is never empty
       setGenrePath([]);
-      setRecordings([]);
-      setTotalResults(0);
-      setCurrentQuery("");
-      setSectionTitle("Featured Archival Classics");
       setGenreSearch("");
+      setDropdownPath([]);
+      loadRecordings("", "Featured Archival Classics");
     } else {
       const newPath = genrePath.slice(0, index + 1);
-      handleSelectFullPath(newPath, true);
+      handleSelectFullPath(newPath);
     }
   };
 
   const handleSwitchSibling = (sibling: GenreNode) => {
     const newPath = [...genrePath.slice(0, genrePath.length - 1), sibling];
-    handleSelectFullPath(newPath, true);
+    handleSelectFullPath(newPath);
   };
 
   const handleExtendRecordings = async () => {
@@ -276,72 +266,19 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
     }
   };
 
+  // Featured classics on mount — the genre list is always visible, never empty
+  useEffect(() => {
+    loadRecordings("", "Featured Archival Classics");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="space-y-5 pb-12">
-      {/* ========================================================================= */}
-      {/* 1. SPACE-SAVING GENRE DISCOVERY DROPDOWN HEADER */}
-      {/* ========================================================================= */}
-      <div className="relative">
-        <TabHeader
-          icon={<Disc3 className="w-4 h-4" />}
-          title="Genre Discovery"
-          titleId="genre-discovery-dropdown-trigger"
-          onTitleClick={() => setIsGenreDropdownOpen(!isGenreDropdownOpen)}
-          titleExtra={
-            <ChevronDown
-              className={`w-4 h-4 text-amber-400 transition-transform duration-200 shrink-0 ${
-                isGenreDropdownOpen ? "rotate-180" : ""
-              }`}
-            />
-          }
-          subtitle={
-            genrePath.length > 0 ? (
-              <span className="text-amber-300 font-medium">
-                Active: {genrePath.map((n) => n.name).join(" → ")}
-              </span>
-            ) : (
-              "Select a genre from the dropdown to display archival classics"
-            )
-          }
-          actions={
-            <>
-              {genrePath.length > 0 && (
-                <button
-                  id="btn-clear-genre-selection"
-                  type="button"
-                  onClick={() => handleJumpToBreadcrumb(-1)}
-                  className="px-3 py-2 text-xs text-stone-400 hover:text-stone-200 bg-stone-950 border border-stone-800 hover:border-stone-700 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer"
-                  title="Clear selected genre"
-                >
-                  <X className="w-3.5 h-3.5 text-stone-500" />
-                  <span>Clear Genre</span>
-                </button>
-              )}
-              <button
-                id="btn-toggle-genre-dropdown"
-                type="button"
-                onClick={() => setIsGenreDropdownOpen(!isGenreDropdownOpen)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer bg-stone-950 hover:bg-stone-850 text-stone-300 border border-stone-800"
-              >
-                <span>{isGenreDropdownOpen ? "Hide Genres" : "Browse Genres"}</span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                    isGenreDropdownOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-            </>
-          }
-        />
-
-        {/* ========================================================================= */}
-        {/* DROPDOWN MENU / PANEL (Browse primary genres or search all genres) */}
-        {/* ========================================================================= */}
-        {isGenreDropdownOpen && (
-          <div
-            id="genre-dropdown-panel"
-            className="mt-2.5 p-4 bg-stone-900/98 border border-stone-800 rounded-2xl shadow-2xl backdrop-blur-2xl space-y-3.5 animate-in fade-in slide-in-from-top-2 duration-150 z-20"
-          >
+      {/* Genre list — always visible, no title, no dropdown */}
+      <div
+        id="genre-list"
+        className="p-4 bg-stone-900/90 border border-stone-800 rounded-2xl shadow-sm space-y-3.5"
+      >
             {/* Top Toolbar: Navigation / Breadcrumbs & Quick Search */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-stone-800 pb-3">
               <div className="flex items-center flex-wrap gap-2 text-xs">
@@ -401,14 +338,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                       </button>
                     )}
                   </div>
-                ) : (
-                  <>
-                    <span className="font-semibold text-stone-200">Primary Genres</span>
-                    <span className="text-[11px] text-stone-500 font-mono">
-                      ({GENRE_HIERARCHY.length})
-                    </span>
-                  </>
-                )}
+                ) : null}
               </div>
 
               {/* Fast genre search input */}
@@ -494,8 +424,17 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                         <div className="flex items-start justify-between gap-1">
                           <button
                             type="button"
-                            onClick={() => handleSelectFullPath(itemPath)}
+                            onClick={() =>
+                              subgenreCount > 0
+                                ? setDropdownPath(itemPath)
+                                : handleSelectFullPath(itemPath)
+                            }
                             className="text-xs font-bold text-left group-hover:text-amber-300 transition-colors truncate cursor-pointer flex-1"
+                            title={
+                              subgenreCount > 0
+                                ? `Open ${subgenreCount} subgenres`
+                                : `Play ${item.name} classics`
+                            }
                           >
                             {item.name}
                           </button>
@@ -517,34 +456,6 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                             <ExternalLink className="w-3 h-3" />
                           </a>
                         </div>
-
-                        {item.description && (
-                          <p className="text-[10px] text-stone-400 line-clamp-2 mt-1 leading-snug">
-                            {item.description}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="mt-2.5 pt-1.5 border-t border-stone-800/60 flex items-center justify-between gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectFullPath(itemPath)}
-                          className="px-2 py-1 bg-stone-900 hover:bg-amber-500 hover:text-stone-950 text-stone-300 rounded-lg text-[10px] font-medium transition-colors cursor-pointer"
-                        >
-                          Select & Listen
-                        </button>
-
-                        {subgenreCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setDropdownPath(itemPath)}
-                            className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 rounded-lg text-[10px] font-medium transition-colors flex items-center space-x-1 cursor-pointer"
-                            title={`Explore ${subgenreCount} subgenres under ${item.name}`}
-                          >
-                            <span>Explore ({subgenreCount})</span>
-                            <ChevronRight className="w-3 h-3" />
-                          </button>
-                        )}
                       </div>
                     </div>
                   );
@@ -552,39 +463,8 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
               </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* ========================================================================= */}
-      {/* 2. PROMPT OR RECORDINGS: JUST WHEN A GENRE IS SELECTED DO CLASSICS APPEAR */}
-      {/* ========================================================================= */}
-      {genrePath.length === 0 ? (
-        <div
-          id="discover-genre-placeholder"
-          className="py-12 px-6 rounded-2xl bg-stone-900/40 border border-stone-800/80 text-center space-y-3"
-        >
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mx-auto">
-            <Disc3 className="w-6 h-6" />
-          </div>
-          <div className="max-w-md mx-auto space-y-1">
-            <h3 className="text-sm font-semibold text-stone-200">
-              Discover Rare Archival Classics
-            </h3>
-            <p className="text-xs text-stone-400 leading-relaxed">
-              Click the <span className="text-amber-300 font-medium">Genre Discovery</span> dropdown above to select a genre and reveal live concert tapes, 78 RPM vintage masters, and digital netlabel releases.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsGenreDropdownOpen(true)}
-            className="mt-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded-xl shadow transition-all cursor-pointer inline-flex items-center space-x-1.5"
-          >
-            <span>Browse Genres</span>
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      ) : (
-        <>
+      {/* Recordings — always rendered; featured classics load on mount */}
           {/* ========================================================================= */}
           {/* 1.25. DEDICATED INTERACTIVE HIERARCHICAL BREADCRUMB TRAIL */}
           {/* Enables clicking and navigating: All Genres -> Rock -> Psychedelic Rock -> Neo-Psychedelia */}
@@ -660,7 +540,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
           {/* ========================================================================= */}
           {/* 1.5. AUTOMATICALLY DEPLOYED SUBGENRES BAR (Shows subgenres when genre is selected) */}
           {/* ========================================================================= */}
-          {!isGenreDropdownOpen && deployedSubgenres.length > 0 && (
+          {deployedSubgenres.length > 0 && (
             <div
               id="discover-deployed-subgenres"
               className="bg-stone-900/90 border border-stone-800 p-3 sm:p-3.5 rounded-2xl space-y-2.5 shadow-sm"
@@ -714,11 +594,11 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                       onClick={() => {
                         if (isSelected) return;
                         if (currentNode && currentNode.subgenres?.some((s) => s.id === sub.id)) {
-                          handleSelectSubgenre(sub, false);
+                          handleSelectSubgenre(sub);
                         } else if (parentNode && parentNode.subgenres?.some((s) => s.id === sub.id)) {
                           handleSwitchSibling(sub);
                         } else {
-                          handleSelectSubgenre(sub, false);
+                          handleSelectSubgenre(sub);
                         }
                       }}
                       className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer shrink-0 snap-start ${
@@ -927,110 +807,37 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                       key={item.identifier}
                       id={`discover-card-${item.identifier}`}
                       onClick={() => onSelectAlbumForDetail(item)}
-                      className="group bg-stone-900/40 hover:bg-stone-850/80 border border-stone-800 hover:border-stone-700 rounded-2xl p-3 flex flex-col justify-between transition-all hover:shadow-xl cursor-pointer"
+                      className="group bg-stone-900/40 hover:bg-stone-850/80 border border-stone-800 hover:border-stone-700 rounded-2xl p-3 transition-all hover:shadow-xl cursor-pointer"
                     >
-                      <div>
-                        <div className="aspect-square rounded-xl overflow-hidden bg-stone-950 border border-stone-850 relative group-hover:shadow-md mb-2.5">
-                          {item.coverUrl ? (
-                            <img
-                              src={item.coverUrl}
-                              alt={item.title}
-                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-stone-600">
-                              <Disc3 className="w-8 h-8" />
-                            </div>
-                          )}
-
-                          {/* Quick Play Button */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePlayAlbum(item.identifier);
-                            }}
-                            className={`absolute bottom-2 right-2 w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 flex items-center justify-center shadow-lg transition-transform hover:scale-110 cursor-pointer ${
-                              isThisPlaying ? "opacity-100 scale-100" : "opacity-0 group-hover:opacity-100"
-                            }`}
-                            title="Play Recording"
-                          >
-                            <Play className="w-4 h-4 fill-stone-950 ml-0.5" />
-                          </button>
-                        </div>
-
-                        <h3
-                          className="text-xs font-semibold text-stone-200 group-hover:text-amber-400 transition-colors line-clamp-2"
-                          title={item.title}
-                        >
-                          {item.title}
-                        </h3>
-
-                        <p
-                          className="text-[11px] text-stone-400 hover:text-stone-200 mt-1 truncate"
-                          title={item.artist}
-                          onClick={(e) => {
-                            if (onOpenArtistDiscography && item.artist) {
-                              e.stopPropagation();
-                              onOpenArtistDiscography(item.artist);
-                            }
-                          }}
-                        >
-                          {item.artist || "Unknown Artist"}
-                        </p>
+                      <div className="aspect-square rounded-xl overflow-hidden bg-stone-950 border border-stone-850 relative group-hover:shadow-md mb-2.5">
+                        {item.coverUrl ? (
+                          <img
+                            src={item.coverUrl}
+                            alt={item.title}
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-stone-600">
+                            <Disc3 className="w-8 h-8" />
+                          </div>
+                        )}
                       </div>
 
-                      <div className="mt-3 pt-2.5 border-t border-stone-800/80 flex items-center justify-between">
-                        <span className="text-[10px] text-stone-500 font-mono">
-                          {item.year || "Archive"}
-                        </span>
+                      <h3
+                        className="text-xs font-semibold text-stone-200 group-hover:text-amber-400 transition-colors line-clamp-1"
+                        title={item.title}
+                      >
+                        {item.title}
+                      </h3>
 
-                        <div className="flex items-center space-x-1">
-                          {/* Quick ZIP Download */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              downloadAlbumZip(item.identifier, `${item.artist || "Archive"} - ${item.title}`);
-                            }}
-                            className="p-1 text-stone-500 hover:text-amber-400 hover:bg-stone-800 rounded transition-colors"
-                            title="Download Album (ZIP)"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Capture to Vault Button */}
-                          <button
-                            type="button"
-                            disabled={inVault || isCapturing}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCaptureItem(item.identifier);
-                            }}
-                            className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all flex items-center space-x-1 ${
-                              inVault
-                                ? "bg-stone-850 text-stone-400 border border-stone-750 cursor-default"
-                                : "bg-[var(--color-secondary-main)]/15 hover:bg-[var(--color-secondary-main)] text-[var(--color-secondary-light)] hover:text-stone-950 border border-[var(--color-secondary-main)]/40 cursor-pointer shadow-xs"
-                            }`}
-                            title={inVault ? "In your Vault" : "Capture Album to Vault"}
-                          >
-                            {isCapturing ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : inVault ? (
-                              <>
-                                <Check className="w-3 h-3" />
-                                <span>Vaulted</span>
-                              </>
-                            ) : (
-                              <>
-                                <Plus className="w-3 h-3" />
-                                <span>Capture</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
+                      <p
+                        className="text-[11px] text-stone-400 mt-1 truncate"
+                        title={item.artist}
+                      >
+                        {item.artist || "Unknown Artist"}
+                        {item.year ? ` • ${item.year}` : ""}
+                      </p>
                     </div>
                   );
                 })}
@@ -1064,8 +871,6 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
               </div>
             )}
           </div>
-        </>
-      )}
     </div>
   );
 };

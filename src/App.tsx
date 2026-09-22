@@ -264,12 +264,13 @@ export default function App() {
 
   const openSharedPlaylist = (name: string, tracks: Track[]) => {
     const first = tracks[0];
+    const stamp = Date.now();
     const album: Album = {
-      id: `shared_${Date.now()}`,
-      identifier: `shared_${Date.now()}`,
+      id: `shared_${stamp}`,
+      identifier: `shared_${stamp}`,
       title: name,
       artist: "Shared mixtape",
-      coverUrl: `https://archive.org/services/img/${first.albumId}`,
+      coverUrl: first.albumId ? `https://archive.org/services/img/${first.albumId}` : undefined,
       collection: "Shared Mixtape",
       tracks: tracks.map((t, i) => ({ ...t, trackNumber: i + 1, album: name })),
       source: "Shared link",
@@ -625,10 +626,10 @@ export default function App() {
             </div>
             <div className="space-y-0.5">
               <h3 className="text-xs font-semibold text-stone-300">
-                Tune into the Audio Archives
+                ArchiveTuna
               </h3>
               <p className="text-[11px] text-stone-500 max-w-sm mx-auto leading-relaxed">
-                Stream millions of live concerts, tapers soundboards, 78 RPM recordings, and indie masters on Archive.org.
+                Free forever, built solo. If the music moves you, a small donation keeps the tapes spinning and the app growing.
               </p>
               <a
                 href="https://github.com/sponsors/cyberbuddhy"
@@ -697,6 +698,11 @@ export default function App() {
           onUpdateTierList={handleUpdateTierList}
           onCreateTierList={handleCreateTierList}
           vaultAction={sharedMix ? { label: "Add playlist to my vault", onAction: handleSaveSharedMix } : undefined}
+          isInVault={
+            !!detailAlbum &&
+            (existingAlbumIds.has(detailAlbum.id) ||
+              (!!detailAlbum.identifier && existingAlbumIds.has(detailAlbum.identifier)))
+          }
         />
 
         {/* Global Artist Discography Modal */}

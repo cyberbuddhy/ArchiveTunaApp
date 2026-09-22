@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Search,
   Plus,
@@ -25,6 +25,7 @@ import {
 import { downloadAlbumZip } from "../utils/download";
 import {
   Album,
+  ListenHistoryItem,
   SearchFieldType,
   SearchCollectionType,
   SearchEraType,
@@ -39,10 +40,15 @@ import {
   addSearchHistoryItem,
   removeSearchHistoryItem,
   clearStoredSearchHistory,
+  getStoredHistory,
 } from "../services/storage";
+import {
+  getContinueListening,
+  getListeningStats,
+  loadHistoryPlayback,
+} from "../services/insights";
 import { usePlayer } from "../context/PlayerContext";
 import { ArchiveLogo } from "./ArchiveLogo";
-import { TabHeader } from "./TabHeader";
 import { TIER_CONFIG } from "../utils/tierList";
 
 interface SearchViewProps {
@@ -64,7 +70,28 @@ export const SearchView: React.FC<SearchViewProps> = ({
   onOpenArtistDiscography,
   initialSearch,
 }) => {
-  const { playAlbum, currentTrack, isPlaying } = usePlayer();
+  const { playAlbum, playTrack, currentTrack, isPlaying } = usePlayer();
+
+  // Home shelf: recent listens + stats, shown until the first search
+  const [homeHistory, setHomeHistory] = useState<ListenHistoryItem[]>([]);
+  const [replayingId, setReplayingId] = useState<string | null>(null);
+  useEffect(() => {
+    setHomeHistory(getStoredHistory());
+  }, []);
+  const homeContinue = useMemo(() => getContinueListening(homeHistory, 8), [homeHistory]);
+  const homeStats = useMemo(() => getListeningStats(homeHistory), [homeHistory]);
+
+  const handleReplayContinue = async (item: { trackId: string; title: string; albumId: string }) => {
+    if (replayingId) return;
+    setReplayingId(item.trackId);
+    try {
+      const loaded = await loadHistoryPlayback(item, fetchAlbumDetails);
+      if (!loaded) return;
+      playTrack(loaded.track, loaded.album, loaded.album.tracks);
+    } finally {
+      setReplayingId(null);
+    }
+  };
 
   // Search input state
   const [searchQuery, setSearchQuery] = useState("");
@@ -552,16 +579,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
   return (
     <div className="space-y-6 pb-12">
       {/* SEARCH HEADER: Input Bar with Autocomplete + "+" Advanced Search Button */}
-      <div className="max-w-4xl mx-auto space-y-3">
-        <TabHeader
-          icon={<Search className="w-4 h-4" />}
-          title="Search the archives"
-          subtitle={
-            hasSearched && activeQuery
-              ? `${results.length} recordings for "${activeQuery}"`
-              : "Live concerts, 78 RPM masters & netlabel releases"
-          }
-        />
+      <div className="space-y-3 pt-2">
         <div ref={searchContainerRef} className="relative">
           <form onSubmit={handleSearchSubmit} className="relative shadow-lg rounded-2xl">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-stone-400 z-20">
@@ -1048,6 +1066,55 @@ export const SearchView: React.FC<SearchViewProps> = ({
         )}
       </div>
 
+      {/* HOME: continue listening + stats, only before the first search */}
+      {!hasSearched && homeContinue.length > 0 && (
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs sm:text-sm font-semibold text-stone-200">Continue listening</h3>
+            <span className="font-mono text-[11px] text-stone-500">
+              {homeStats.minutesListened >= 60
+                ? `${(homeStats.minutesListened / 60).toFixed(1)}h`
+                : `${homeStats.minutesListened}m`}
+              {" "}· {homeStats.uniqueArtists} artists · {homeStats.totalListens} plays
+              {homeStats.dayStreak > 1 && ` · ${homeStats.dayStreak}d streak`}
+            </span>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+            {homeContinue.map((c) => (
+              <button
+                key={c.trackId}
+                type="button"
+                onClick={() => handleReplayContinue(c)}
+                disabled={replayingId !== null}
+                className="group w-28 shrink-0 text-left cursor-pointer disabled:opacity-60"
+                title={`Replay ${c.title}`}
+              >
+                <div className="relative aspect-square rounded-lg overflow-hidden bg-stone-900 border border-stone-800 mb-1.5">
+                  <img
+                    src={`https://archive.org/services/img/${c.albumId}`}
+                    alt={c.album}
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                  {replayingId === c.trackId && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs font-semibold text-stone-100 truncate group-hover:text-amber-300">
+                  {c.title}
+                </p>
+                <p className="text-[11px] text-stone-400 truncate">{c.artist}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* SEARCH RESULTS */}
       {hasSearched && (
         /* Results Grid */
@@ -1126,131 +1193,38 @@ export const SearchView: React.FC<SearchViewProps> = ({
                 return (
                   <div
                     key={item.identifier}
-                    className="group bg-stone-900/70 hover:bg-stone-850 border border-stone-800/80 hover:border-amber-500/40 rounded-xl p-2.5 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-md"
+                    onClick={() => handleOpenItemDetail(item.identifier)}
+                    className="group bg-stone-900/70 hover:bg-stone-850 border border-stone-800/80 hover:border-amber-500/40 rounded-xl p-2.5 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
                   >
-                    <div>
-                      {/* Album / Item Cover Art */}
-                      <div
-                        onClick={() => handleOpenItemDetail(item.identifier)}
-                        className="relative aspect-square rounded-lg overflow-hidden bg-stone-950 mb-2 shadow-inner cursor-pointer"
-                      >
-                        <img
-                          src={
-                            item.coverUrl ||
-                            `https://archive.org/services/img/${item.identifier}`
-                          }
-                          alt={item.title}
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=80";
-                          }}
-                        />
-                      </div>
-
-                      {/* Title & Artist */}
-                      <div className="space-y-0.5">
-                        <h4
-                          onClick={() => handleOpenItemDetail(item.identifier)}
-                          className="text-xs font-semibold text-stone-100 hover:text-amber-400 transition-colors line-clamp-1 cursor-pointer"
-                          title={item.title}
-                        >
-                          {item.title}
-                        </h4>
-
-                        <div className="flex items-center justify-between text-[11px] text-stone-400">
-                          {onOpenArtistDiscography ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenArtistDiscography(item.artist || item.creator || "Artist");
-                              }}
-                              className="hover:text-amber-300 transition-colors line-clamp-1 text-left flex items-center gap-1 group/art"
-                              title={`View full discography of ${item.artist || item.creator}`}
-                            >
-                              <span className="line-clamp-1">{item.artist || item.creator || "Unknown Artist"}</span>
-                              <Disc3 className="w-2.5 h-2.5 text-stone-500 group-hover/art:text-amber-400 shrink-0" />
-                            </button>
-                          ) : (
-                            <span className="line-clamp-1">
-                              {item.artist || item.creator || "Unknown Artist"}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                    {/* Album / Item Cover Art */}
+                    <div className="relative aspect-square rounded-lg overflow-hidden bg-stone-950 mb-2 shadow-inner">
+                      <img
+                        src={
+                          item.coverUrl ||
+                          `https://archive.org/services/img/${item.identifier}`
+                        }
+                        alt={item.title}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=80";
+                        }}
+                      />
                     </div>
 
-                    {/* Metadata Badges & Capture Button */}
-                    <div className="mt-2 pt-2 border-t border-stone-800/60 flex items-center justify-between">
-                      <div className="flex items-center space-x-1.5 text-[10px] text-stone-500">
-                        {isThisPlaying && (
-                          <span className="text-amber-400 font-bold flex items-center gap-0.5" title="Playing preview">
-                            <Volume2 className="w-2.5 h-2.5 animate-pulse" />
-                          </span>
-                        )}
-                        {tier && (
-                          <span
-                            className={`px-1.5 py-0.2 rounded font-black text-[9.5px] ${
-                              TIER_CONFIG[tier]?.bgClass || "bg-stone-800"
-                            } text-black`}
-                            title={`Rated ${tier} Tier`}
-                          >
-                            {tier}
-                          </span>
-                        )}
-                        {isFavorite && (
-                          <span title="Liked in Vault">
-                            <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
-                          </span>
-                        )}
-                        {item.year && <span>{item.year}</span>}
-                        {item.downloads && (
-                          <span>• {Number(item.downloads).toLocaleString()} dl</span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center space-x-1">
-                        <button
-                          type="button"
-                          onClick={(e) => downloadAlbumZip(item.identifier, item.title, e)}
-                          className="p-1 text-stone-500 hover:text-amber-400 transition-colors cursor-pointer"
-                          title="Download album (ZIP)"
-                        >
-                          <Download className="w-3 h-3" />
-                        </button>
-
-                        <a
-                          href={`https://archive.org/details/${item.identifier}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1 text-stone-500 hover:text-stone-300 transition-colors"
-                          title="View on Archive.org"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-
-                        <button
-                          id={`cap-res-${item.identifier}`}
-                          disabled={inVault || isCapturing}
-                          onClick={() => handleCaptureItem(item.identifier)}
-                          className={`p-1 rounded-md text-xs transition-colors flex items-center space-x-0.5 ${
-                            inVault
-                              ? "text-stone-400 bg-stone-800/80 border border-stone-750 cursor-default"
-                              : "text-[var(--color-secondary-light)] hover:text-stone-950 bg-[var(--color-secondary-main)]/15 hover:bg-[var(--color-secondary-main)] border border-[var(--color-secondary-main)]/40 cursor-pointer"
-                          }`}
-                          title={inVault ? "Saved in Vault" : "Capture to Vault"}
-                        >
-                          {isCapturing ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : inVault ? (
-                            <Check className="w-3 h-3" />
-                          ) : (
-                            <Plus className="w-3 h-3" />
-                          )}
-                        </button>
-                      </div>
+                    {/* Title, Artist & Year — everything else lives in the detail view */}
+                    <div className="space-y-0.5">
+                      <h4
+                        className="text-xs font-semibold text-stone-100 group-hover:text-amber-400 transition-colors line-clamp-1"
+                        title={item.title}
+                      >
+                        {item.title}
+                      </h4>
+                      <p className="text-[11px] text-stone-400 line-clamp-1">
+                        {item.artist || item.creator || "Unknown Artist"}
+                        {item.year ? ` • ${item.year}` : ""}
+                      </p>
                     </div>
                   </div>
                 );

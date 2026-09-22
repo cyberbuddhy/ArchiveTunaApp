@@ -46,15 +46,10 @@ export const TierListView: React.FC<TierListViewProps> = ({
   onShowToast,
 }) => {
   const { playAlbum } = usePlayer();
-  const [selectedListId, setSelectedListId] = useState<string>("master");
+  const [selectedListId, setSelectedListId] = useState<string>("");
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [newListDesc, setNewListDesc] = useState("");
-
-  // Add album modal state
-  const [isAddAlbumOpen, setIsAddAlbumOpen] = useState(false);
-  const [selectedAlbumToAdd, setSelectedAlbumToAdd] = useState<string>("");
-  const [selectedTierForNewItem, setSelectedTierForNewItem] = useState<TierRank>("S");
 
   // Export menu state
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
@@ -64,133 +59,49 @@ export const TierListView: React.FC<TierListViewProps> = ({
   const [draggedAlbumId, setDraggedAlbumId] = useState<string | null>(null);
   const [activeDropTier, setActiveDropTier] = useState<TierRank | null>(null);
 
-  // Master Tier List generated from all albums in vault that have a tier
-  const masterItems: TierItem[] = useMemo(() => {
-    return albums
-      .filter((a) => !!a.tier)
-      .map((a) => ({
-        albumId: a.id,
-        rank: a.tier!,
-        albumTitle: a.title,
-        artist: a.artist,
-        coverUrl: a.coverUrl,
-        year: a.year,
-      }));
-  }, [albums]);
-
-  const activeList: TierList = useMemo(() => {
-    if (selectedListId === "master") {
-      return {
-        id: "master",
-        name: "Master Vault Tier List",
-        description: "All ranked albums across your Vault in one master tier view.",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        items: masterItems,
-      };
-    }
+  const activeList: TierList | null = useMemo(() => {
     const found = tierLists.find((t) => t.id === selectedListId);
     if (found) return found;
-    return {
-      id: "master",
-      name: "Master Vault Tier List",
-      description: "All ranked albums across your Vault in one master tier view.",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      items: masterItems,
-    };
-  }, [selectedListId, tierLists, masterItems]);
+    return tierLists[0] || null;
+  }, [selectedListId, tierLists]);
+
+  const defaultListName = `Tierlist #${tierLists.length + 1}`;
 
   const handleCreateNewList = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newListName.trim()) return;
-    onCreateTierList(newListName.trim(), newListDesc.trim());
+    const name = newListName.trim() || defaultListName;
+    onCreateTierList(name, newListDesc.trim());
     setNewListName("");
     setNewListDesc("");
     setIsCreatingList(false);
   };
 
-  const handleAddItemToActiveList = () => {
-    if (!selectedAlbumToAdd) return;
-    const album = albums.find((a) => a.id === selectedAlbumToAdd);
-    if (!album) return;
-
-    if (activeList.id === "master") {
-      // In master list, updating tier on the album updates the master list
-      onUpdateAlbum({ ...album, tier: selectedTierForNewItem });
-      onShowToast(`Ranked "${album.title}" as ${selectedTierForNewItem}-Tier in Master List!`);
-    } else {
-      // Custom tier list
-      const existingIdx = activeList.items.findIndex((it) => it.albumId === album.id);
-      const newItem: TierItem = {
-        albumId: album.id,
-        rank: selectedTierForNewItem,
-        albumTitle: album.title,
-        artist: album.artist,
-        coverUrl: album.coverUrl,
-        year: album.year,
-        addedAt: new Date().toISOString(),
-      };
-
-      let nextItems: TierItem[];
-      if (existingIdx !== -1) {
-        nextItems = [...activeList.items];
-        nextItems[existingIdx] = newItem;
-      } else {
-        nextItems = [newItem, ...activeList.items];
-      }
-
-      onUpdateTierList({
-        ...activeList,
-        items: nextItems,
-        updatedAt: new Date().toISOString(),
-      });
-      onShowToast(`Added "${album.title}" to ${selectedTierForNewItem}-Tier!`);
-    }
-
-    setIsAddAlbumOpen(false);
-    setSelectedAlbumToAdd("");
-  };
-
   const handleChangeItemTier = (albumId: string, newRank: TierRank) => {
-    if (activeList.id === "master") {
-      const album = albums.find((a) => a.id === albumId);
-      if (album) {
-        onUpdateAlbum({ ...album, tier: newRank });
-        onShowToast(`Moved to ${newRank}-Tier`);
-      }
-    } else {
-      const nextItems = activeList.items.map((it) =>
-        it.albumId === albumId ? { ...it, rank: newRank } : it
-      );
-      onUpdateTierList({
-        ...activeList,
-        items: nextItems,
-        updatedAt: new Date().toISOString(),
-      });
-      onShowToast(`Moved to ${newRank}-Tier`);
-    }
+    if (!activeList) return;
+    const nextItems = activeList.items.map((it) =>
+      it.albumId === albumId ? { ...it, rank: newRank } : it
+    );
+    onUpdateTierList({
+      ...activeList,
+      items: nextItems,
+      updatedAt: new Date().toISOString(),
+    });
+    onShowToast(`Moved to ${newRank}-Tier`);
   };
 
   const handleRemoveItem = (albumId: string) => {
-    if (activeList.id === "master") {
-      const album = albums.find((a) => a.id === albumId);
-      if (album) {
-        onUpdateAlbum({ ...album, tier: undefined });
-        onShowToast(`Removed from Tier List`, "info");
-      }
-    } else {
-      const nextItems = activeList.items.filter((it) => it.albumId !== albumId);
-      onUpdateTierList({
-        ...activeList,
-        items: nextItems,
-        updatedAt: new Date().toISOString(),
-      });
-      onShowToast(`Removed from Tier List`, "info");
-    }
+    if (!activeList) return;
+    const nextItems = activeList.items.filter((it) => it.albumId !== albumId);
+    onUpdateTierList({
+      ...activeList,
+      items: nextItems,
+      updatedAt: new Date().toISOString(),
+    });
+    onShowToast(`Removed from Tier List`, "info");
   };
 
   const handleExportImage = async () => {
+    if (!activeList) return;
     try {
       setIsExportingImage(true);
       await exportTierListAsImage(activeList.name, activeList.items);
@@ -205,6 +116,7 @@ export const TierListView: React.FC<TierListViewProps> = ({
   };
 
   const handleCopyText = (format: "markdown" | "plain") => {
+    if (!activeList) return;
     const text = formatTierListAsText(activeList.name, activeList.items, format);
     navigator.clipboard.writeText(text);
     onShowToast(`Copied ${format === "markdown" ? "Markdown" : "Text"} to clipboard!`);
@@ -212,6 +124,7 @@ export const TierListView: React.FC<TierListViewProps> = ({
   };
 
   const handleDownloadText = (format: "markdown" | "plain") => {
+    if (!activeList) return;
     const text = formatTierListAsText(activeList.name, activeList.items, format);
     const ext = format === "markdown" ? "md" : "txt";
     const filename = `${activeList.name.replace(/[/\\?%*:|"<>]/g, "-").toLowerCase()}-tierlist.${ext}`;
@@ -251,7 +164,7 @@ export const TierListView: React.FC<TierListViewProps> = ({
             <h4 className="text-xs font-semibold text-stone-200">New Tier List</h4>
             <input
               type="text"
-              placeholder="e.g. 70s Rock Masters"
+              placeholder={defaultListName}
               value={newListName}
               onChange={(e) => setNewListName(e.target.value)}
               className="w-full px-2.5 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-xs text-stone-200 placeholder-stone-600 focus:outline-none focus:border-amber-500"
@@ -274,8 +187,7 @@ export const TierListView: React.FC<TierListViewProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={!newListName.trim()}
-                className="px-3 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-stone-950 font-semibold text-xs rounded-md"
+                className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-md"
               >
                 Create
               </button>
@@ -285,31 +197,6 @@ export const TierListView: React.FC<TierListViewProps> = ({
 
         {/* Tier lists list */}
         <div className="space-y-1">
-          {/* Master Vault Tier List */}
-          <div
-            onClick={() => setSelectedListId("master")}
-            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-              selectedListId === "master"
-                ? "bg-amber-500/10 border-amber-500/30 text-amber-300 shadow-sm"
-                : "bg-stone-900/40 border-stone-800/80 hover:bg-stone-900/80 hover:border-stone-700 text-stone-300"
-            }`}
-          >
-            <div className="min-w-0 flex-1 mr-2">
-              <div className="flex items-center space-x-1.5">
-                <Award className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <h4 className="text-xs font-semibold truncate">
-                  Master Vault Tier List
-                </h4>
-              </div>
-              <p className="text-[10px] text-stone-500 mt-0.5">
-                {masterItems.length} album{masterItems.length === 1 ? "" : "s"}
-              </p>
-            </div>
-            <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[9px] font-bold">
-              ALL
-            </span>
-          </div>
-
           {/* Custom Tier Lists */}
           {tierLists.map((tl) => (
             <div
@@ -332,12 +219,12 @@ export const TierListView: React.FC<TierListViewProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (confirm(`Delete Tier List "${tl.name}"?`)) {
-                    onDeleteTierList(tl.id);
-                    if (selectedListId === tl.id) {
-                      setSelectedListId("master");
+                    if (confirm(`Delete Tier List "${tl.name}"?`)) {
+                      onDeleteTierList(tl.id);
+                      if (selectedListId === tl.id) {
+                        setSelectedListId("");
+                      }
                     }
-                  }
                 }}
                 className="p-1 text-stone-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 title="Delete Tier List"
@@ -351,6 +238,8 @@ export const TierListView: React.FC<TierListViewProps> = ({
 
       {/* RIGHT COLUMN: DEPLOYED TIER LIST SHOWING */}
       <div className="md:col-span-3 space-y-4">
+        {activeList ? (
+          <>
         {/* Tier List Top Bar */}
         <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
           <div>
@@ -366,16 +255,6 @@ export const TierListView: React.FC<TierListViewProps> = ({
           </div>
 
           <div className="flex items-center space-x-2 shrink-0">
-            {/* Add Album to List Button */}
-            <button
-              id="add-album-to-tierlist-btn"
-              onClick={() => setIsAddAlbumOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs flex items-center space-x-1.5 shadow-sm cursor-pointer transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Album</span>
-            </button>
-
             {/* Export Dropdown */}
             <div className="relative">
               <button
@@ -543,95 +422,15 @@ export const TierListView: React.FC<TierListViewProps> = ({
             );
           })}
         </div>
-      </div>
-
-      {/* MODAL: ADD ALBUM TO TIER LIST */}
-      {isAddAlbumOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setIsAddAlbumOpen(false)}>
-          <div className="w-full max-w-md bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl p-5 space-y-4 animate-in fade-in" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-stone-100">Add Album to Tier List</h3>
-              <button
-                onClick={() => setIsAddAlbumOpen(false)}
-                className="text-stone-400 hover:text-stone-200 text-xs"
-              >
-                Cancel
-              </button>
-            </div>
-
-            {albums.length === 0 ? (
-              <p className="text-xs text-stone-400 py-4 text-center">
-                Your Vault has no albums yet. Search and capture albums from Archive.org first!
-              </p>
-            ) : (
-              <div className="space-y-3.5">
-                <div>
-                  <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1.5">
-                    Select Album:
-                  </label>
-                  <select
-                    value={selectedAlbumToAdd}
-                    onChange={(e) => setSelectedAlbumToAdd(e.target.value)}
-                    className="w-full px-3 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-200 focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="">-- Choose an Album from Vault --</option>
-                    {albums.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.title} - {a.artist} {a.tier ? `(Currently ${a.tier}-Tier)` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1.5">
-                    Choose Tier:
-                  </label>
-                  <div className="grid grid-cols-6 gap-2">
-                    {TIER_RANKS.map((r) => {
-                      const cfg = TIER_CONFIG[r];
-                      const isSelected = selectedTierForNewItem === r;
-                      return (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => setSelectedTierForNewItem(r)}
-                          className={`p-2 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
-                            cfg.bgClass
-                          } ${cfg.textClass} ${
-                            isSelected ? "ring-2 ring-white ring-offset-2 ring-offset-stone-900 scale-105" : "opacity-75 hover:opacity-100"
-                          }`}
-                        >
-                          <span className="font-bold text-base">{r}</span>
-                          <span className="text-[9px] uppercase opacity-90">Tier</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end space-x-2 pt-3 border-t border-stone-800">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddAlbumOpen(false)}
-                    className="px-3 py-1.5 rounded-lg text-xs text-stone-400 hover:text-stone-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!selectedAlbumToAdd}
-                    onClick={handleAddItemToActiveList}
-                    className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-stone-950 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
-                  >
-                    Add to Tier List
-                  </button>
-                </div>
-              </div>
-            )}
+          </>
+        ) : (
+          <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-8 text-center space-y-2">
+            <Layers className="w-8 h-8 text-stone-600 mx-auto" />
+            <h3 className="text-sm font-bold text-stone-200">No tier lists yet</h3>
+            <p className="text-xs text-stone-400">Hit New to create Tierlist #1.</p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

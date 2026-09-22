@@ -2,10 +2,6 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,20 +10,6 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json({ limit: "50mb" }));
-
-// Lazy initialize Gemini AI client
-function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
-  });
-}
 
 // Health check endpoint
 app.get("/api/health", (_req, res) => {
@@ -636,138 +618,28 @@ app.post("/api/archive/resolve-url", async (req, res) => {
   }
 });
 
-// Discovery Engine: AI & Metadata-grounded music recommendations
+// Discovery Engine: metadata-grounded music recommendations (no AI services)
 app.post("/api/discover", async (req, res) => {
   try {
     const { history = [], library = [] } = req.body;
 
-    // Aggregate metadata from listened tracks & library
+    // Aggregate top artists from listened tracks & library for personalization
     const artists = new Set<string>();
-    const genres = new Set<string>();
-    const eras = new Set<string>();
-    const collections = new Set<string>();
-    const trackTitles: string[] = [];
 
     // Analyze listened history
     history.slice(0, 30).forEach((item: any) => {
       if (item.artist && item.artist !== "Unknown Artist") artists.add(item.artist);
-      if (item.title) trackTitles.push(`${item.artist} - ${item.title}`);
-      if (item.genre) {
-        item.genre.split(/[,;/]/).forEach((g: string) => {
-          const clean = g.trim();
-          if (clean.length > 2) genres.add(clean);
-        });
-      }
-      if (item.year) eras.add(String(item.year));
-      if (item.collection) collections.add(item.collection);
     });
 
     // Also include top library items
     library.slice(0, 20).forEach((album: any) => {
       if (album.artist && album.artist !== "Unknown Artist") artists.add(album.artist);
-      if (album.genre) {
-        album.genre.split(/[,;/]/).forEach((g: string) => {
-          const clean = g.trim();
-          if (clean.length > 2) genres.add(clean);
-        });
-      }
-      if (album.year) eras.add(String(album.year));
-      if (album.collection) collections.add(album.collection);
     });
 
     const artistList = Array.from(artists).slice(0, 15);
-    const genreList = Array.from(genres).slice(0, 15);
-    const eraList = Array.from(eras).slice(0, 10);
-    const collectionList = Array.from(collections).slice(0, 8);
 
-    const gemini = getGeminiClient();
-
-    let aiRecommendations: any = null;
-
-    if (gemini && (artistList.length > 0 || genreList.length > 0 || eraList.length > 0)) {
-      try {
-        const prompt = `You are an expert music archivist and historian for the Internet Archive (Archive.org), Live Music Archive (etree), Netlabels, and Open Music Collections.
-Analyze the user's listened music metadata:
-- Artists listened to: ${artistList.join(", ") || "Diverse archival music"}
-- Genres & Tags: ${genreList.join(", ") || "Eclectic audio"}
-- Eras/Years: ${eraList.join(", ") || "1960s-2020s"}
-- Recent tracks: ${trackTitles.slice(0, 8).join("; ") || "Various recordings"}
-- Archival Collections: ${collectionList.join(", ") || "etree, netlabels, 78rpm, audio_music"}
-
-Your task: Provide curated archival music discoveries. For each recommendation, suggest:
-1. "artistOrProject": The recommended archival artist, taper band, netlabel, or composer.
-2. "albumOrShowTitle": Specific landmark recording, live show, or album title available in the public domain or Creative Commons / Archive.org.
-3. "archiveSearchQuery": A concise Lucene search query for Archive.org (e.g., 'creator:"Grateful Dead" AND year:1977' or 'collection:netlabels ambient' or '"Fugazi" mediatype:audio').
-4. "reason": Why the user will love it based specifically on their listened metadata.
-5. "category": One of ("Sonic Kindred", "Archival Landmark", "Deep Netlabel Gem", "Era Discovery", "Live Taper Treasure").
-6. "tags": Array of 2-4 genre/mood tags.
-
-Also provide:
-- "listeningProfile": A 2-sentence poetic summary of the user's current musical taste aesthetic.
-- "recommendedCollections": Top 3 Archive.org collections suited for them (e.g., "etree", "netlabels", "georgeblood78s", "librivoxaudio", "audio_music").`;
-
-        const response = await gemini.models.generateContent({
-          model: "gemini-3.8-flash",
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                listeningProfile: { type: Type.STRING },
-                recommendedCollections: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-                discoveries: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      artistOrProject: { type: Type.STRING },
-                      albumOrShowTitle: { type: Type.STRING },
-                      archiveSearchQuery: { type: Type.STRING },
-                      reason: { type: Type.STRING },
-                      category: { type: Type.STRING },
-                      tags: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING },
-                      },
-                    },
-                    required: ["artistOrProject", "albumOrShowTitle", "archiveSearchQuery", "reason", "category"],
-                  },
-                },
-              },
-              required: ["listeningProfile", "discoveries", "recommendedCollections"],
-            },
-          },
-        });
-
-        if (response.text) {
-          try {
-            const parsed: unknown = JSON.parse(response.text.trim());
-            if (
-              parsed &&
-              typeof parsed === "object" &&
-              Array.isArray((parsed as { discoveries?: unknown }).discoveries) &&
-              (parsed as { discoveries: unknown[] }).discoveries.length > 0
-            ) {
-              aiRecommendations = parsed;
-            } else {
-              console.warn("Gemini discovery schema mismatch — using curated fallback");
-            }
-          } catch (parseErr) {
-            console.warn("Gemini discovery parse fallback:", parseErr);
-          }
-        }
-      } catch (aiErr) {
-        console.warn("Gemini discovery generation fallback:", aiErr);
-      }
-    }
-
-    // Default or fallback discoveries if AI is not configured or user has empty library
-    if (!aiRecommendations || !aiRecommendations.discoveries || aiRecommendations.discoveries.length === 0) {
-      aiRecommendations = {
+    // Curated house discoveries, personalized with the listener's top artists
+    const recommendations = {
         listeningProfile: artistList.length > 0 
           ? `Explorer of timeless sounds featuring ${artistList.slice(0, 3).join(", ")} and exploratory archival recordings.`
           : "Fresh explorer ready to dive into millions of live tapers, netlabel experiments, and historic 78rpm sound treasures.",
@@ -807,11 +679,10 @@ Also provide:
           },
         ],
       };
-    }
 
     // Now, run parallel Archive.org queries for the recommended search queries so user gets real, instantly playable albums!
     const verifiedItems: any[] = [];
-    const queriesToFetch = aiRecommendations.discoveries.slice(0, 4);
+    const queriesToFetch = recommendations.discoveries.slice(0, 4);
 
     await Promise.allSettled(
       queriesToFetch.map(async (disc: any) => {
@@ -859,9 +730,9 @@ Also provide:
     );
 
     return res.json({
-      profile: aiRecommendations.listeningProfile,
-      recommendedCollections: aiRecommendations.recommendedCollections,
-      discoveries: aiRecommendations.discoveries,
+      profile: recommendations.listeningProfile,
+      recommendedCollections: recommendations.recommendedCollections,
+      discoveries: recommendations.discoveries,
       liveArchivedMatches: verifiedItems,
     });
   } catch (err: any) {

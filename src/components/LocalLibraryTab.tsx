@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   FolderOpen,
-  FilePlus2,
   RefreshCw,
   Trash2,
   Play,
@@ -26,18 +25,17 @@ import {
   indexFiles,
   loadDirectoryHandle,
   loadIndex,
-  pickAudioFiles,
   pickMusicFolder,
   resolveObjectUrl,
   resyncSavedDirectory,
   saveIndex,
-  supportsDirectoryPicker,
   toPlayerTrack,
 } from "../services/localLibrary";
 
 interface LocalLibraryTabProps {
   searchQuery: string;
   onShowToast?: (message: string, type?: "success" | "info") => void;
+  onEntriesChange?: (entries: LocalTrackEntry[]) => void;
 }
 
 function metaOf(e: LocalTrackEntry): LocalTrackMeta {
@@ -45,7 +43,7 @@ function metaOf(e: LocalTrackEntry): LocalTrackMeta {
   return meta;
 }
 
-export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, onShowToast }) => {
+export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, onShowToast, onEntriesChange }) => {
   const { playTrack, playRandomTracks, currentTrack } = usePlayer();
   const [entries, setEntries] = useState<LocalTrackEntry[]>([]);
   const [folderName, setFolderName] = useState<string | null>(null);
@@ -74,6 +72,11 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
     };
   }, []);
 
+  // Report entries up so All Songs can include local files
+  useEffect(() => {
+    onEntriesChange?.(entries);
+  }, [entries, onEntriesChange]);
+
   const handlePickFolder = async () => {
     if (busy) return;
     setBusy("pick");
@@ -100,29 +103,6 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
       onShowToast?.(`Synced ${fresh.length} local track${fresh.length === 1 ? "" : "s"} from "${picked.dirName}"`, "success");
     } catch (err) {
       onShowToast?.("Couldn't read that folder.", "info");
-    } finally {
-      setBusy(null);
-      setProgress(null);
-    }
-  };
-
-  const handlePickFiles = async () => {
-    if (busy) return;
-    setBusy("pick");
-    try {
-      const files = await pickAudioFiles();
-      if (!files) return;
-      setBusy("scan");
-      const fresh = await indexFiles(files, (done, total) => setProgress({ done, total }));
-      setEntries((prev) => {
-        const prevIds = new Set(prev.map((e) => e.id));
-        const next = [...prev, ...fresh.filter((e) => !prevIds.has(e.id))];
-        saveIndex(next.map(metaOf));
-        return next;
-      });
-      onShowToast?.(`Added ${fresh.length} local track${fresh.length === 1 ? "" : "s"}`, "success");
-    } catch {
-      onShowToast?.("Couldn't read those files.", "info");
     } finally {
       setBusy(null);
       setProgress(null);
@@ -277,16 +257,12 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
           <div>
             <div className="flex items-center space-x-2">
               <h3 className="text-sm font-bold text-stone-100">
-                {folderName ? `Local folder: ${folderName}` : "Your device's music"}
+                Local Music
               </h3>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 font-semibold">
-                {supportsDirectoryPicker() ? "Folder sync" : "File picker"}
-              </span>
             </div>
             <p className="text-xs text-stone-400 mt-0.5">
               {entries.length} local track{entries.length === 1 ? "" : "s"} •{" "}
               {(totalBytes / (1024 * 1024)).toFixed(1)} MB on this device.
-              Tip: point your ArchiveTuna download folder at this same folder, then Resync to pull downloads in.
             </p>
           </div>
         </div>
@@ -319,15 +295,6 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
           >
             {busy === "pick" || busy === "scan" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderOpen className="w-3.5 h-3.5" />}
             <span>Pick music folder</span>
-          </button>
-          <button
-            onClick={handlePickFiles}
-            disabled={!!busy}
-            title="Pick individual audio files (best on mobile)"
-            className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-200 border border-stone-800 font-semibold text-xs transition-colors flex items-center space-x-2 cursor-pointer"
-          >
-            <FilePlus2 className="w-3.5 h-3.5" />
-            <span>Pick files</span>
           </button>
           {hasSavedDir && (
             <button

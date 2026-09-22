@@ -51,7 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               id="nav-tab-search"
               onClick={() => setActiveTab("search")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                 activeTab === "search"
                   ? "bg-[var(--color-accent-main)] text-stone-950 font-semibold shadow-xs"
                   : "text-stone-400 hover:text-stone-200 hover:bg-stone-850/50"
@@ -64,7 +64,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               id="nav-tab-discover"
               onClick={() => setActiveTab("discover")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                 activeTab === "discover"
                   ? "bg-[var(--color-secondary-main)] text-stone-950 font-semibold shadow-xs"
                   : "text-stone-400 hover:text-stone-200 hover:bg-stone-850/50"
@@ -77,7 +77,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               id="nav-tab-vault"
               onClick={() => setActiveTab("vault")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                 activeTab === "vault"
                   ? "bg-stone-100 text-stone-950 font-semibold shadow-xs"
                   : "text-stone-400 hover:text-stone-200 hover:bg-stone-850/50"

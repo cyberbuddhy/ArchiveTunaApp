@@ -5,6 +5,8 @@ html,
 body {
   overflow-x: hidden;
   max-width: 100vw;
+  /* Reserve the scrollbar gutter so tab switches never shift content sideways */
+  scrollbar-gutter: stable;
 }
 @supports (overflow: clip) {
   html,

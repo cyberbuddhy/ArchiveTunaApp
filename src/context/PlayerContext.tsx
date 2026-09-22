@@ -69,6 +69,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const recordedRef = useRef<boolean>(false);
   const prefetchedRef = useRef<string | null>(null);
   const currentBlobUrlRef = useRef<string | null>(null);
+  // Generation counter: async work (cache lookup) from a superseded play is dropped
+  const playGenRef = useRef(0);
 
   // Offline caching status
   const [isCurrentTrackOffline, setIsCurrentTrackOffline] = useState<boolean>(false);
@@ -356,6 +358,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!track) return;
     const audio = audioRef.current;
     if (!audio) return;
+    const gen = ++playGenRef.current;
 
     // Revoke previous blob URL if any to prevent memory leak
     if (currentBlobUrlRef.current) {
@@ -382,11 +385,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     let playbackSrc = track.streamUrl;
     try {
       const cachedBlobUrl = await offlineCache.getCachedTrackBlobUrl(track.id);
+      // A newer play request superseded this one mid-lookup — never touch audio
+      if (playGenRef.current !== gen) return;
       if (cachedBlobUrl) {
         playbackSrc = cachedBlobUrl;
         currentBlobUrlRef.current = cachedBlobUrl;
       }
     } catch (cacheErr) {
+      if (playGenRef.current !== gen) return;
       console.warn("Offline cache check failed, using streamUrl:", cacheErr);
     }
 
@@ -430,9 +436,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setQueue(validQueue);
       const idx = validQueue.findIndex((t) => t && t.id === track.id);
       setQueueIndex(idx !== -1 ? idx : 0);
-    } else if (queue.length === 0) {
-      setQueue([track]);
-      setQueueIndex(0);
+    } else {
+      // Keep the index meaningful: sync to the track if queued, else queue it
+      const q = stateRef.current.queue;
+      const idx = q.findIndex((t) => t && t.id === track.id);
+      if (idx !== -1) {
+        setQueueIndex(idx);
+      } else {
+        setQueue([...q, track]);
+        setQueueIndex(q.length);
+      }
     }
     loadAndPlay(track, album);
   };
@@ -557,16 +570,23 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const prevTrack = () => {
-    if (currentTime > 3) {
+    // Read fresh state: this runs from MediaSession/keyboard handlers too
+    const st = stateRef.current;
+    if (st.currentTime > 3) {
       seek(0);
-    } else if (queueIndex > 0) {
-      const prevIdx = queueIndex - 1;
+    } else if (st.queueIndex > 0) {
+      const prevIdx = st.queueIndex - 1;
+      const prevEntry = st.queue[prevIdx];
+      if (!prevEntry) {
+        seek(0);
+        return;
+      }
       const executePrev = () => {
         setQueueIndex(prevIdx);
-        loadAndPlay(queue[prevIdx]);
+        loadAndPlay(prevEntry);
       };
       const currentSettings = getStoredPlayerSettings();
-      if (currentSettings.crossfadeSeconds > 0 && isPlaying && audioRef.current) {
+      if (currentSettings.crossfadeSeconds > 0 && st.isPlaying && audioRef.current) {
         audioEngine.fadeOut(audioRef.current, Math.min(currentSettings.crossfadeSeconds, 1.2), executePrev);
       } else {
         executePrev();
@@ -631,17 +651,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [currentTime, duration, queue, queueIndex, currentTrack]);
 
   const removeFromQueue = (index: number) => {
-    setQueue((prev) => {
-      const updated = prev.filter((_, i) => i !== index);
-      if (index === queueIndex && updated.length > 0) {
-        const nextIdx = Math.min(index, updated.length - 1);
-        setQueueIndex(nextIdx);
-        loadAndPlay(updated[nextIdx]);
-      } else if (index < queueIndex) {
-        setQueueIndex((curr) => curr - 1);
-      }
-      return updated;
-    });
+    // Compute from a snapshot, then apply — never run effects inside an updater
+    const q = stateRef.current.queue;
+    const qIdx = stateRef.current.queueIndex;
+    const updated = q.filter((_, i) => i !== index);
+    setQueue(updated);
+    if (index === qIdx && updated.length > 0) {
+      const nextIdx = Math.min(index, updated.length - 1);
+      setQueueIndex(nextIdx);
+      loadAndPlay(updated[nextIdx]);
+    } else if (index < qIdx) {
+      setQueueIndex(qIdx - 1);
+    }
   };
 
   const clearQueue = () => {
@@ -662,8 +683,19 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       (async () => {
         try {
           const album = await fetchAlbumDetails(albumId);
-          const t = album.tracks.find((x) => x.trackNumber === track) || album.tracks[track - 1] || album.tracks[0];
-          if (!t) return;
+          if (!album.tracks || album.tracks.length === 0) {
+            window.dispatchEvent(new CustomEvent("archive_track_error", {
+              detail: "Shared link has no playable tracks.",
+            }));
+            return;
+          }
+          const t = album.tracks.find((x) => x.trackNumber === track) || album.tracks[track - 1];
+          if (!t) {
+            window.dispatchEvent(new CustomEvent("archive_track_error", {
+              detail: `Shared link points to track ${track}, but this album has ${album.tracks.length}.`,
+            }));
+            return;
+          }
           setQueue(album.tracks);
           setQueueIndex(album.tracks.indexOf(t));
           loadAndPlay(t, album);
