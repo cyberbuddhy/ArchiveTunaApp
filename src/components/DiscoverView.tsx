@@ -15,7 +15,6 @@ import {
   Download,
   X,
   Search,
-  Layers,
 } from "lucide-react";
 import { downloadAlbumZip } from "../utils/download";
 import { GENRE_HIERARCHY, GenreNode } from "../data/genreHierarchy";
@@ -66,10 +65,6 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   const [totalResults, setTotalResults] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Determine current node in hierarchy
-  const currentNode: GenreNode | null =
-    genrePath.length > 0 ? genrePath[genrePath.length - 1] : null;
-
   // Flattened catalogue for searching all genres & subgenres
   interface FlattenedGenreItem {
     node: GenreNode;
@@ -105,36 +100,6 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
         item.breadcrumbLabel.toLowerCase().includes(q)
     );
   }, [allFlattenedGenres, genreSearch]);
-
-  // Sibling genres if at leaf node
-  const parentNode: GenreNode | null =
-    genrePath.length > 1 ? genrePath[genrePath.length - 2] : null;
-  const siblingSubgenres: GenreNode[] = parentNode
-    ? (parentNode.subgenres || []).filter((s) => s.id !== currentNode?.id)
-    : [];
-
-  // Automatically deployed subgenres for selected genre
-  const deployedSubgenres: GenreNode[] = useMemo(() => {
-    if (!currentNode) return [];
-    if (currentNode.subgenres && currentNode.subgenres.length > 0) {
-      return currentNode.subgenres;
-    }
-    if (parentNode && parentNode.subgenres && parentNode.subgenres.length > 0) {
-      return parentNode.subgenres;
-    }
-    return [];
-  }, [currentNode, parentNode]);
-
-  const deployedSectionTitle = useMemo(() => {
-    if (!currentNode) return "";
-    if (currentNode.subgenres && currentNode.subgenres.length > 0) {
-      return `Subgenres of ${currentNode.name}`;
-    }
-    if (parentNode) {
-      return `Subgenres of ${parentNode.name} • Active: ${currentNode.name}`;
-    }
-    return `Subgenres of ${currentNode.name}`;
-  }, [currentNode, parentNode]);
 
   const secondaryFiltersCount =
     (collection !== "all" ? 1 : 0) +
@@ -191,11 +156,6 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
     handleSelectFullPath(item.path);
   };
 
-  const handleSelectSubgenre = (node: GenreNode) => {
-    const newPath = [...genrePath, node];
-    handleSelectFullPath(newPath);
-  };
-
   const handleJumpToBreadcrumb = (index: number) => {
     if (index < 0) {
       // Jump to root — back to featured classics, the tab is never empty
@@ -207,11 +167,6 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
       const newPath = genrePath.slice(0, index + 1);
       handleSelectFullPath(newPath);
     }
-  };
-
-  const handleSwitchSibling = (sibling: GenreNode) => {
-    const newPath = [...genrePath.slice(0, genrePath.length - 1), sibling];
-    handleSelectFullPath(newPath);
   };
 
   const handleExtendRecordings = async () => {
@@ -302,8 +257,12 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => setDropdownPath([])}
+                      onClick={() => {
+                        if (dropdownPath.length === 0) handleJumpToBreadcrumb(-1);
+                        else setDropdownPath([]);
+                      }}
                       className="px-2 py-1 text-stone-400 hover:text-stone-200 text-xs transition-colors cursor-pointer"
+                      title="Back to featured classics"
                     >
                       All Genres
                     </button>
@@ -327,16 +286,6 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                         </React.Fragment>
                       );
                     })}
-
-                    {currentDropdownNode && (
-                      <button
-                        type="button"
-                        onClick={() => handleSelectFullPath(dropdownPath)}
-                        className="ml-2 px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer"
-                      >
-                        Listen to all {currentDropdownNode.name}
-                      </button>
-                    )}
                   </div>
                 ) : null}
               </div>
@@ -424,11 +373,10 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                         <div className="flex items-start justify-between gap-1">
                           <button
                             type="button"
-                            onClick={() =>
-                              subgenreCount > 0
-                                ? setDropdownPath(itemPath)
-                                : handleSelectFullPath(itemPath)
-                            }
+                            onClick={() => {
+                              if (subgenreCount > 0) setDropdownPath(itemPath);
+                              handleSelectFullPath(itemPath);
+                            }}
                             className="text-xs font-bold text-left group-hover:text-amber-300 transition-colors truncate cursor-pointer flex-1"
                             title={
                               subgenreCount > 0
@@ -465,173 +413,9 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
           </div>
 
       {/* Recordings — always rendered; featured classics load on mount */}
-          {/* ========================================================================= */}
-          {/* 1.25. DEDICATED INTERACTIVE HIERARCHICAL BREADCRUMB TRAIL */}
-          {/* Enables clicking and navigating: All Genres -> Rock -> Psychedelic Rock -> Neo-Psychedelia */}
-          {/* ========================================================================= */}
-          <nav
-            id="genre-breadcrumb-trail"
-            aria-label="Genre Breadcrumb Trail"
-            className="bg-stone-900/95 border border-stone-800 p-2.5 sm:p-3 rounded-2xl flex items-center flex-wrap gap-1.5 shadow-sm"
-          >
-            <div className="flex items-center space-x-1.5 mr-1 text-[11px] font-bold text-stone-400 uppercase tracking-wider select-none">
-              <span>Trail:</span>
-            </div>
-
-            {/* Root "All Genres" */}
-            <button
-              type="button"
-              id="breadcrumb-btn-all-genres"
-              onClick={() => handleJumpToBreadcrumb(-1)}
-              className="px-2.5 py-1.5 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors flex items-center space-x-1 cursor-pointer"
-              title="Return to All Genres"
-            >
-              <Disc3 className="w-3.5 h-3.5 text-stone-500" />
-              <span>All Genres</span>
-            </button>
-
-            {/* Breadcrumb Steps: Rock -> Psychedelic Rock -> Neo-Psychedelia */}
-            {genrePath.map((node, index) => {
-              const isCurrent = index === genrePath.length - 1;
-              const hasSubgenres = node.subgenres && node.subgenres.length > 0;
-
-              return (
-                <React.Fragment key={`crumb_${node.id}_${index}`}>
-                  <ChevronRight className="w-3.5 h-3.5 text-stone-600 shrink-0" />
-                  <button
-                    type="button"
-                    id={`breadcrumb-btn-${node.id}`}
-                    onClick={() => handleJumpToBreadcrumb(index)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-                      isCurrent
-                        ? "bg-amber-500 text-stone-950 shadow-sm"
-                        : "text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20"
-                    }`}
-                    title={
-                      isCurrent
-                        ? `Currently active: ${node.name}`
-                        : `Navigate back to ${node.name}`
-                    }
-                  >
-                    <span>{node.name}</span>
-                    {hasSubgenres && !isCurrent && (
-                      <span className="text-[10px] opacity-75 font-mono">
-                        ({node.subgenres?.length})
-                      </span>
-                    )}
-                  </button>
-                </React.Fragment>
-              );
-            })}
-
-            {/* Clear All Breadcrumbs Button */}
-            <button
-              type="button"
-              id="breadcrumb-btn-clear-trail"
-              onClick={() => handleJumpToBreadcrumb(-1)}
-              className="ml-auto px-2 py-1 text-xs text-stone-500 hover:text-stone-300 hover:bg-stone-800 rounded-lg transition-colors flex items-center space-x-1 cursor-pointer"
-              title="Clear genre path"
-            >
-              <X className="w-3.5 h-3.5" />
-              <span className="text-[11px]">Clear</span>
-            </button>
-          </nav>
 
           {/* ========================================================================= */}
           {/* 1.5. AUTOMATICALLY DEPLOYED SUBGENRES BAR (Shows subgenres when genre is selected) */}
-          {/* ========================================================================= */}
-          {deployedSubgenres.length > 0 && (
-            <div
-              id="discover-deployed-subgenres"
-              className="bg-stone-900/90 border border-stone-800 p-3 sm:p-3.5 rounded-2xl space-y-2.5 shadow-sm"
-            >
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center space-x-2">
-                  <Layers className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-xs font-bold text-stone-200">
-                    {deployedSectionTitle}
-                  </span>
-                  <span className="text-[10px] text-stone-500 font-mono">
-                    ({deployedSubgenres.length})
-                  </span>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  {genrePath.length > 1 && parentNode && (
-                    <button
-                      type="button"
-                      onClick={() => handleJumpToBreadcrumb(genrePath.indexOf(parentNode))}
-                      className="text-[11px] text-amber-400 hover:text-amber-300 transition-colors flex items-center space-x-1 cursor-pointer font-medium"
-                      title={`Go up to ${parentNode.name}`}
-                    >
-                      <span>↑ Back to {parentNode.name}</span>
-                    </button>
-                  )}
-
-                  {genrePath.length > 2 && genrePath[0] && (
-                    <button
-                      type="button"
-                      onClick={() => handleJumpToBreadcrumb(0)}
-                      className="text-[11px] text-stone-400 hover:text-stone-200 transition-colors flex items-center space-x-1 cursor-pointer"
-                      title={`Go to top level ${genrePath[0].name}`}
-                    >
-                      <span>(Top: {genrePath[0].name})</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Subgenre Chips / Pills - scrollable & swipeable on mobile */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none select-none touch-pan-x snap-x scroll-smooth">
-                {deployedSubgenres.map((sub) => {
-                  const isSelected = currentNode?.id === sub.id;
-                  const hasNestedSubgenres = sub.subgenres && sub.subgenres.length > 0;
-                  return (
-                    <button
-                      key={sub.id}
-                      type="button"
-                      id={`deployed-subgenre-chip-${sub.id}`}
-                      onClick={() => {
-                        if (isSelected) return;
-                        if (currentNode && currentNode.subgenres?.some((s) => s.id === sub.id)) {
-                          handleSelectSubgenre(sub);
-                        } else if (parentNode && parentNode.subgenres?.some((s) => s.id === sub.id)) {
-                          handleSwitchSibling(sub);
-                        } else {
-                          handleSelectSubgenre(sub);
-                        }
-                      }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer shrink-0 snap-start ${
-                        isSelected
-                          ? "bg-amber-500 text-stone-950 font-bold shadow-sm ring-1 ring-amber-400"
-                          : "bg-stone-950 hover:bg-stone-850 text-stone-300 hover:text-stone-100 border border-stone-800 hover:border-amber-500/40"
-                      }`}
-                      title={
-                        hasNestedSubgenres
-                          ? `Click to explore nested subgenres inside ${sub.name} (${sub.subgenres?.length})`
-                          : `Select ${sub.name}`
-                      }
-                    >
-                      <span>{sub.name}</span>
-                      {hasNestedSubgenres && (
-                        <span
-                          className={`text-[10px] px-1.5 py-0.2 rounded-md flex items-center space-x-0.5 ${
-                            isSelected
-                              ? "bg-stone-950/25 text-stone-900 font-bold"
-                              : "bg-stone-800 text-stone-300 group-hover:text-amber-300"
-                          }`}
-                        >
-                          <span>→</span>
-                          <span>{sub.subgenres?.length}</span>
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* FILTER & SORT CONTROLS */}
           <div className="bg-stone-900/80 border border-stone-800 p-3 rounded-2xl space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2.5">

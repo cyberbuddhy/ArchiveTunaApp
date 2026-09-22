@@ -43,9 +43,9 @@ import {
   getStoredHistory,
 } from "../services/storage";
 import {
-  getContinueListening,
+  getContinueAlbums,
   getListeningStats,
-  loadHistoryPlayback,
+  timeAgo,
 } from "../services/insights";
 import { usePlayer } from "../context/PlayerContext";
 import { ArchiveLogo } from "./ArchiveLogo";
@@ -72,24 +72,25 @@ export const SearchView: React.FC<SearchViewProps> = ({
 }) => {
   const { playAlbum, playTrack, currentTrack, isPlaying } = usePlayer();
 
-  // Home shelf: recent listens + stats, shown until the first search
+  // Home shelf: recent albums + stats, shown until the first search
   const [homeHistory, setHomeHistory] = useState<ListenHistoryItem[]>([]);
-  const [replayingId, setReplayingId] = useState<string | null>(null);
+  const [openingAlbumId, setOpeningAlbumId] = useState<string | null>(null);
   useEffect(() => {
     setHomeHistory(getStoredHistory());
   }, []);
-  const homeContinue = useMemo(() => getContinueListening(homeHistory, 8), [homeHistory]);
+  const homeContinue = useMemo(() => getContinueAlbums(homeHistory, 8), [homeHistory]);
   const homeStats = useMemo(() => getListeningStats(homeHistory), [homeHistory]);
 
-  const handleReplayContinue = async (item: { trackId: string; title: string; albumId: string }) => {
-    if (replayingId) return;
-    setReplayingId(item.trackId);
+  const handleOpenContinueAlbum = async (albumId: string) => {
+    if (openingAlbumId) return;
+    setOpeningAlbumId(albumId);
     try {
-      const loaded = await loadHistoryPlayback(item, fetchAlbumDetails);
-      if (!loaded) return;
-      playTrack(loaded.track, loaded.album, loaded.album.tracks);
+      const full = await fetchAlbumDetails(albumId);
+      onSelectAlbumForDetail(full);
+    } catch {
+      // Unresolvable album (deleted upstream?) — stay on search
     } finally {
-      setReplayingId(null);
+      setOpeningAlbumId(null);
     }
   };
 
@@ -1082,12 +1083,12 @@ export const SearchView: React.FC<SearchViewProps> = ({
           <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
             {homeContinue.map((c) => (
               <button
-                key={c.trackId}
+                key={c.albumId}
                 type="button"
-                onClick={() => handleReplayContinue(c)}
-                disabled={replayingId !== null}
+                onClick={() => handleOpenContinueAlbum(c.albumId)}
+                disabled={openingAlbumId !== null}
                 className="group w-28 shrink-0 text-left cursor-pointer disabled:opacity-60"
-                title={`Replay ${c.title}`}
+                title={`Open ${c.album}`}
               >
                 <div className="relative aspect-square rounded-lg overflow-hidden bg-stone-900 border border-stone-800 mb-1.5">
                   <img
@@ -1099,16 +1100,19 @@ export const SearchView: React.FC<SearchViewProps> = ({
                       (e.target as HTMLImageElement).style.display = "none";
                     }}
                   />
-                  {replayingId === c.trackId && (
+                  {openingAlbumId === c.albumId && (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                       <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
                     </div>
                   )}
                 </div>
                 <p className="text-xs font-semibold text-stone-100 truncate group-hover:text-amber-300">
-                  {c.title}
+                  {c.album}
                 </p>
                 <p className="text-[11px] text-stone-400 truncate">{c.artist}</p>
+                <p className="font-mono text-[10px] text-stone-500 truncate mt-0.5">
+                  {c.plays} play{c.plays === 1 ? "" : "s"} · {timeAgo(c.listenedAt)}
+                </p>
               </button>
             ))}
           </div>

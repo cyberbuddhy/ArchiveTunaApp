@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   buildSmartMixes,
-  getContinueListening,
+  getContinueAlbums,
   getListeningStats,
+  timeAgo,
 } from "./insights";
 import type { Album, ListenHistoryItem, Track } from "../types";
 
@@ -47,23 +48,36 @@ function hist(trackId: string, listenedAt: string, extra: Partial<ListenHistoryI
   };
 }
 
-describe("getContinueListening", () => {
-  it("dedupes by track, newest first, skips local entries", () => {
+describe("getContinueAlbums", () => {
+  it("groups a few played songs into their whole album", () => {
     const h = [
       hist("t1", "2026-09-03T10:00:00.000Z"),
-      hist("t1", "2026-09-02T10:00:00.000Z"),
-      hist("t2", "2026-09-01T10:00:00.000Z", { albumId: "local_library" }),
-      hist("t3", "2026-08-30T10:00:00.000Z"),
+      hist("t2", "2026-09-03T11:00:00.000Z"),
+      hist("t9", "2026-09-01T10:00:00.000Z", { albumId: "alb2", album: "Other" }),
+      hist("t3", "2026-08-30T10:00:00.000Z", { albumId: "local_library" }),
     ];
-    const out = getContinueListening(h, 8);
-    expect(out.map((c) => c.trackId)).toEqual(["t1", "t3"]);
+    const out = getContinueAlbums(h, 8);
+    expect(out.map((c) => c.albumId)).toEqual(["alb1", "alb2"]);
+    expect(out[0].plays).toBe(2);
   });
 
-  it("respects the limit", () => {
+  it("respects the limit and orders newest first", () => {
     const h = [0, 1, 2, 3, 4].map((i) =>
-      hist(`t${i}`, `2026-09-0${i + 1}T10:00:00.000Z`)
+      hist(`t${i}`, `2026-09-0${i + 1}T10:00:00.000Z`, { albumId: `alb${i}`, album: `Album ${i}` })
     );
-    expect(getContinueListening(h, 3)).toHaveLength(3);
+    const out = getContinueAlbums(h, 3);
+    expect(out).toHaveLength(3);
+    expect(out[0].albumId).toBe("alb4");
+  });
+});
+
+describe("timeAgo", () => {
+  it("formats relative times", () => {
+    const now = Date.parse("2026-09-10T12:00:00.000Z");
+    expect(timeAgo("2026-09-10T11:59:30.000Z", now)).toBe("just now");
+    expect(timeAgo("2026-09-10T10:00:00.000Z", now)).toBe("2h ago");
+    expect(timeAgo("2026-09-07T12:00:00.000Z", now)).toBe("3d ago");
+    expect(timeAgo("not-a-date", now)).toBe("");
   });
 });
 

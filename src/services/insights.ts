@@ -5,33 +5,55 @@
  */
 import type { Album, ListenHistoryItem, Track } from "../types";
 
-export interface ContinueItem {
-  trackId: string;
-  title: string;
-  artist: string;
-  album: string;
+export interface ContinueAlbum {
   albumId: string;
+  album: string;
+  artist: string;
+  plays: number;
   listenedAt: string;
 }
 
-/** Latest distinct tracks, newest first. Unresolvable entries filtered out. */
-export function getContinueListening(history: ListenHistoryItem[], limit = 8): ContinueItem[] {
-  const seen = new Set<string>();
-  const out: ContinueItem[] = [];
+/** Latest distinct albums, newest first — a few played songs surface the whole album. */
+export function getContinueAlbums(history: ListenHistoryItem[], limit = 8): ContinueAlbum[] {
+  const byAlbum = new Map<string, ContinueAlbum>();
   for (const h of history) {
-    if (!h || !h.trackId || h.albumId === "local_library" || seen.has(h.trackId)) continue;
-    seen.add(h.trackId);
-    out.push({
-      trackId: h.trackId,
-      title: h.title,
-      artist: h.artist,
-      album: h.album,
-      albumId: h.albumId,
-      listenedAt: h.listenedAt,
-    });
-    if (out.length >= limit) break;
+    if (!h || !h.albumId || h.albumId === "local_library") continue;
+    const key = h.albumId;
+    const prev = byAlbum.get(key);
+    if (!prev) {
+      byAlbum.set(key, {
+        albumId: h.albumId,
+        album: h.album || "Unknown Album",
+        artist: h.artist || "Unknown Artist",
+        plays: 1,
+        listenedAt: h.listenedAt,
+      });
+    } else {
+      prev.plays++;
+      if (h.listenedAt > prev.listenedAt) {
+        prev.listenedAt = h.listenedAt;
+        if (h.album) prev.album = h.album;
+        if (h.artist) prev.artist = h.artist;
+      }
+    }
   }
-  return out;
+  return Array.from(byAlbum.values())
+    .sort((a, b) => (b.listenedAt || "").localeCompare(a.listenedAt || ""))
+    .slice(0, limit);
+}
+
+/** Short relative time: "just now", "3h ago", "2d ago", or "Mar 4". */
+export function timeAgo(iso: string, now = Date.now()): string {
+  const t = Date.parse(iso);
+  if (isNaN(t)) return "";
+  const mins = Math.max(0, Math.floor((now - t) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export interface ArtistPlay {

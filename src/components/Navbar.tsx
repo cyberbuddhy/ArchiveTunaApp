@@ -40,7 +40,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               ArchiveTuna
             </span>
             <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-400">
-              Beta
+              Beta v2
             </span>
           </div>
 

@@ -298,14 +298,9 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
             />
 
             <div className="flex-1 min-w-0 space-y-1.5">
-              <div className="flex items-center space-x-2">
-                <span className="px-2 py-0.5 rounded text-[10px] uppercase font-semibold tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                  {album.collection || "Archive.org"}
-                </span>
-                {album.year && (
-                  <span className="text-xs text-stone-400 font-medium">Year: {album.year}</span>
-                )}
-              </div>
+              {album.year && (
+                <span className="text-xs text-stone-400 font-medium">Year: {album.year}</span>
+              )}
 
               <h2 className="text-lg sm:text-xl font-bold text-stone-100 line-clamp-1">{album.title}</h2>
               <div className="flex items-center space-x-2">
