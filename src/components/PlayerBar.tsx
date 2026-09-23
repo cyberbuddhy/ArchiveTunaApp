@@ -13,7 +13,9 @@ import {
   ChevronUp,
   ChevronDown,
   Trash2,
-  Heart,
+  Plus,
+  Check,
+  MoreVertical,
   Download,
   Shuffle,
   Repeat,
@@ -26,7 +28,7 @@ import {
   Database,
 } from "lucide-react";
 import { usePlayer } from "../context/PlayerContext";
-import { Album } from "../types";
+import { Album, Track } from "../types";
 import { fetchAlbumDetails } from "../services/api";
 import { downloadAlbumZip, downloadTrackAudio } from "../utils/download";
 import { Waveform } from "./Waveform";
@@ -36,8 +38,8 @@ import { getStoredPlayerSettings, savePlayerSettings } from "../services/playerS
 interface PlayerBarProps {
   onSelectAlbumForDetail?: (album: Album) => void;
   onOpenArtistDiscography?: (artistName: string) => void;
-  onToggleFavoriteAlbum?: (album: Album) => void;
-  isAlbumFavorite?: (albumId: string) => boolean;
+  onToggleSaveAlbum?: (album: Album) => void;
+  isAlbumSaved?: (albumId: string) => boolean;
 }
 
 const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 2.0];
@@ -45,8 +47,8 @@ const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 2.0];
 export const PlayerBar: React.FC<PlayerBarProps> = ({
   onSelectAlbumForDetail,
   onOpenArtistDiscography,
-  onToggleFavoriteAlbum,
-  isAlbumFavorite,
+  onToggleSaveAlbum,
+  isAlbumSaved,
 }) => {
   const {
     currentTrack,
@@ -83,6 +85,27 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   const [showQueue, setShowQueue] = useState(false);
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const [isFetchingDetail, setIsFetchingDetail] = useState(false);
+  // Overflow (⋮) menu for queue rows — viewport-anchored so it never clips
+  // inside the scrollable queue sheets.
+  const [queueMenu, setQueueMenu] = useState<{
+    key: string;
+    index: number;
+    track: Track;
+    top: number;
+    left: number;
+  } | null>(null);
+  const openQueueMenu = (e: React.MouseEvent, key: string, index: number, track: Track) => {
+    e.stopPropagation();
+    const r = e.currentTarget.getBoundingClientRect();
+    const w = 208;
+    setQueueMenu({
+      key,
+      index,
+      track,
+      top: Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 170)),
+      left: Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)),
+    });
+  };
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverPosition, setHoverPosition] = useState<number>(0);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
@@ -115,7 +138,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   if (!currentTrack) return null;
 
   const activeAlbumId = currentAlbum?.id || currentTrack.albumId;
-  const isFav = activeAlbumId ? isAlbumFavorite?.(activeAlbumId) : false;
+  const isSaved = activeAlbumId ? isAlbumSaved?.(activeAlbumId) : false;
 
   const formatTimeLabel = (secs: number) => formatTime(secs, "0:00");
 
@@ -147,11 +170,11 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
     }
   };
 
-  const handleHeartClick = (e: React.MouseEvent) => {
+  const handleSaveClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!onToggleFavoriteAlbum) return;
+    if (!onToggleSaveAlbum) return;
     if (currentAlbum) {
-      onToggleFavoriteAlbum(currentAlbum);
+      onToggleSaveAlbum(currentAlbum);
     } else if (currentTrack) {
       const fallbackAlbum: Album = {
         id: currentTrack.albumId || `arch_${Date.now()}`,
@@ -163,9 +186,8 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
         capturedAt: new Date().toISOString(),
         source: "Archive.org",
         tracks: [currentTrack],
-        isFavorite: true,
       };
-      onToggleFavoriteAlbum(fallbackAlbum);
+      onToggleSaveAlbum(fallbackAlbum);
     }
   };
 
@@ -359,13 +381,13 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             </div>
 
             <button
-              onClick={handleHeartClick}
+              onClick={handleSaveClick}
               className={`p-2 rounded-full cursor-pointer transition-colors ${
-                isFav ? "text-rose-500" : "text-stone-400 hover:text-stone-200"
+                isSaved ? "text-emerald-400" : "text-stone-400 hover:text-stone-200"
               }`}
-              title={isFav ? "Liked" : "Like"}
+              title={isSaved ? "In Vault" : "Save to Vault"}
             >
-              <Heart className={`w-5 h-5 ${isFav ? "fill-rose-500" : ""}`} />
+              {isSaved ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
             </button>
           </div>
 
@@ -662,13 +684,13 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             </button>
 
             <button
-              onClick={handleHeartClick}
+              onClick={handleSaveClick}
               className={`p-2 transition-colors cursor-pointer ${
-                isFav ? "text-rose-500" : "text-stone-400 hover:text-stone-200"
+                isSaved ? "text-emerald-400" : "text-stone-400 hover:text-stone-200"
               }`}
-              title="Like"
+              title={isSaved ? "In Vault" : "Save to Vault"}
             >
-              <Heart className={`w-4 h-4 ${isFav ? "fill-rose-500" : ""}`} />
+              {isSaved ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             </button>
 
             <button
@@ -761,7 +783,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           </div>
 
           {/* Scrollable Queue Track List */}
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-1 divide-y divide-stone-900">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-2 divide-y divide-white/5">
             {queue.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8 text-stone-500">
                 <ListMusic className="w-12 h-12 text-stone-700 mb-2" />
@@ -777,19 +799,17 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 return (
                   <div
                     key={`mobile_q_${track.id || i}_${i}`}
-                    className={`flex items-center justify-between py-2.5 px-3 rounded-xl text-xs transition-colors ${
+                    onClick={() => playTrack(track, currentAlbum || undefined)}
+                    className={`group flex items-center gap-3 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
                       isCurrent
-                        ? "bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold shadow-sm"
-                        : "text-stone-200 hover:bg-stone-900/80 border border-transparent"
+                        ? "bg-amber-500/10 text-amber-300 border-amber-500/20 font-semibold"
+                        : "text-stone-200 border-transparent hover:bg-white/5"
                     }`}
                   >
-                    <div
-                      onClick={() => playTrack(track, currentAlbum || undefined)}
-                      className="flex items-center space-x-3 min-w-0 flex-1 cursor-pointer pr-2"
-                    >
-                      <span className="text-stone-500 text-[11px] font-mono w-5 text-center shrink-0">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span className="w-6 shrink-0 text-right text-[11px] tabular-nums text-stone-600">
                         {isCurrent && isPlaying ? (
-                          <span className="flex items-center justify-center space-x-0.5">
+                          <span className="flex items-center justify-end space-x-0.5">
                             <span className="w-0.5 h-3 bg-amber-400 animate-pulse" />
                             <span className="w-0.5 h-4 bg-[var(--color-secondary-main)] animate-pulse delay-75" />
                             <span className="w-0.5 h-2 bg-amber-400 animate-pulse delay-150" />
@@ -798,35 +818,24 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                           i + 1
                         )}
                       </span>
-                      <div className="min-w-0 flex-1 truncate">
-                        <span className="truncate font-semibold block text-stone-100">{track.title}</span>
-                        <span className="text-[11px] text-stone-400 truncate block mt-0.5">{track.artist}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-[13px] leading-tight text-stone-100">{track.title}</p>
+                        <p className="text-[11px] text-stone-500 truncate leading-tight mt-0.5">{track.artist}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 shrink-0">
-                      <span className="text-[10px] font-mono text-stone-400">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="w-12 text-right text-[11px] tabular-nums text-stone-500">
                         {formatTimeLabel(track.duration)}
                       </span>
-                      {track.streamUrl && (
-                        <button
-                          type="button"
-                          onClick={(e) =>
-                            downloadTrackAudio(track.streamUrl, `${track.artist} - ${track.title}`, e)
-                          }
-                          className="p-1.5 text-stone-400 hover:text-amber-400 cursor-pointer"
-                          title="Download MP3"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      )}
                       <button
                         type="button"
-                        onClick={() => removeFromQueue(i)}
-                        className="p-1.5 text-stone-400 hover:text-red-400 cursor-pointer"
-                        title="Remove from queue"
+                        onClick={(e) => openQueueMenu(e, `mobile_q_${i}`, i, track)}
+                        aria-label={`More options for ${track.title}`}
+                        className="p-1.5 rounded-full text-stone-500 hover:text-stone-100 hover:bg-white/10 transition-colors cursor-pointer"
+                        title="More options"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <MoreVertical className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -890,26 +899,24 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               </div>
             </div>
 
-            <div className="space-y-1 pt-2">
+            <div className="divide-y divide-white/5 pt-2">
               {(queue || []).map((track, i) => {
                 if (!track) return null;
                 const isCurrent = i === queueIndex;
                 return (
                   <div
                     key={`desk_q_${track.id || i}_${i}`}
-                    className={`flex items-center justify-between py-2 px-2.5 rounded-xl text-xs transition-colors ${
+                    onClick={() => playTrack(track)}
+                    className={`group flex items-center gap-3 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
                       isCurrent
-                        ? "bg-amber-500/15 border border-amber-500/30 text-amber-300 font-medium"
-                        : "text-stone-300 hover:bg-stone-900 border border-transparent"
+                        ? "bg-amber-500/10 border-amber-500/20 text-amber-300 font-medium"
+                        : "text-stone-300 border-transparent hover:bg-white/5"
                     }`}
                   >
-                    <div
-                      onClick={() => playTrack(track)}
-                      className="flex items-center space-x-3 truncate cursor-pointer flex-1 mr-2"
-                    >
-                      <span className="text-stone-500 text-[10px] font-mono w-5 text-center">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span className="w-6 shrink-0 text-right text-[11px] tabular-nums text-stone-600">
                         {isCurrent && isPlaying ? (
-                          <span className="flex items-center justify-center space-x-0.5">
+                          <span className="flex items-center justify-end space-x-0.5">
                             <span className="w-0.5 h-2.5 bg-amber-400 animate-pulse" />
                             <span className="w-0.5 h-3.5 bg-[var(--color-secondary-main)] animate-pulse delay-75" />
                             <span className="w-0.5 h-1.5 bg-amber-400 animate-pulse delay-150" />
@@ -918,31 +925,24 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                           i + 1
                         )}
                       </span>
-                      <span className="truncate">{track.title}</span>
-                      <span className="text-[11px] text-stone-500 truncate">({track.artist})</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-[13px] leading-tight">{track.title}</p>
+                        <p className="text-[11px] text-stone-500 truncate leading-tight mt-0.5">{track.artist}</p>
+                      </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 shrink-0">
-                      <span className="text-[10px] font-mono text-stone-400">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="w-12 text-right text-[11px] tabular-nums text-stone-500">
                         {formatTimeLabel(track.duration)}
                       </span>
-                      {track.streamUrl && (
-                        <button
-                          onClick={(e) =>
-                            downloadTrackAudio(track.streamUrl, `${track.artist} - ${track.title}`, e)
-                          }
-                          className="p-1 text-stone-400 hover:text-amber-400 transition-colors cursor-pointer"
-                          title="Download Track (MP3)"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                        </button>
-                      )}
                       <button
-                        onClick={() => removeFromQueue(i)}
-                        className="p-1 text-stone-400 hover:text-red-400 cursor-pointer"
-                        title="Remove from queue"
+                        type="button"
+                        onClick={(e) => openQueueMenu(e, `desk_q_${i}`, i, track)}
+                        aria-label={`More options for ${track.title}`}
+                        className="p-1.5 rounded-full text-stone-500 hover:text-stone-100 hover:bg-white/10 transition-colors cursor-pointer sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
+                        title="More options"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <MoreVertical className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -1057,7 +1057,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               </div>
             </div>
 
-            {/* Quick Actions: Favorite, Offline Pin & Download */}
+            {/* Quick Actions: Vault Save, Offline Pin & Download */}
             <div className="flex items-center space-x-1 shrink-0">
               {/* Local-First Offline Cache Pin Toggle */}
               <button
@@ -1088,17 +1088,17 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               </button>
 
               <button
-                id="player-heart-btn"
+                id="player-save-btn"
                 type="button"
-                onClick={handleHeartClick}
+                onClick={handleSaveClick}
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  isFav
-                    ? "text-rose-500 hover:text-rose-400 bg-rose-500/10"
-                    : "text-stone-400 hover:text-rose-400 hover:bg-stone-900"
+                  isSaved
+                    ? "text-emerald-400 hover:text-emerald-300 bg-emerald-500/10"
+                    : "text-stone-400 hover:text-emerald-400 hover:bg-stone-900"
                 }`}
-                title={isFav ? "Saved as Liked in Vault" : "Like album & save to Vault"}
+                title={isSaved ? "In your Vault" : "Save album to Vault"}
               >
-                <Heart className={`w-4 h-4 ${isFav ? "fill-rose-500" : ""}`} />
+                {isSaved ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
               </button>
 
               {activeAlbumId && (
@@ -1266,6 +1266,8 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             <div className="flex items-center space-x-2">
               <button
                 onClick={toggleMute}
+                aria-label={isMuted ? "Unmute" : "Mute"}
+                aria-pressed={isMuted}
                 className="text-stone-400 hover:text-stone-200 transition-colors cursor-pointer"
                 title={isMuted ? "Unmute (M)" : "Mute (M)"}
               >
@@ -1286,6 +1288,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 onChange={(e) => setVolume(parseFloat(e.target.value))}
                 className="w-18 h-1.5 bg-stone-800 rounded-lg accent-amber-500 cursor-pointer"
                 title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+                aria-label="Volume"
               />
             </div>
 
@@ -1307,6 +1310,46 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Queue row overflow (⋮) menu — viewport-anchored, shared by both sheets */}
+      {queueMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setQueueMenu(null)} />
+          <div
+            className="fixed z-50 w-52 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 space-y-0.5"
+            style={{ top: queueMenu.top, left: queueMenu.left }}
+          >
+            {queueMenu.track.streamUrl && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  downloadTrackAudio(
+                    queueMenu.track.streamUrl!,
+                    `${queueMenu.track.artist} - ${queueMenu.track.title}`,
+                    e
+                  );
+                  setQueueMenu(null);
+                }}
+                className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+              >
+                <Download className="w-3.5 h-3.5 text-stone-500" />
+                <span>Download</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                removeFromQueue(queueMenu.index);
+                setQueueMenu(null);
+              }}
+              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-stone-500" />
+              <span>Remove from queue</span>
+            </button>
+          </div>
+        </>
+      )}
     </>
   );
 };

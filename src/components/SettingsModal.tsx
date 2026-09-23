@@ -216,6 +216,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <div
       id="settings-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Vault and player settings"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >

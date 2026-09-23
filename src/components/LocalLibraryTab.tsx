@@ -13,6 +13,7 @@ import {
 import { usePlayer } from "../context/PlayerContext";
 import { Album, Track } from "../types";
 import { formatTime } from "../utils/format";
+import { TabHeader } from "./TabHeader";
 import {
   LocalTrackEntry,
   LocalTrackMeta,
@@ -249,75 +250,69 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
   return (
     <div className="space-y-4">
       {/* Header card */}
-      <div className="p-4 rounded-2xl bg-stone-900/60 border border-sky-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
-            <HardDrive className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <h3 className="text-sm font-bold text-stone-100">
-                Local Music
-              </h3>
-            </div>
-            <p className="text-xs text-stone-400 mt-0.5">
-              {entries.length} local track{entries.length === 1 ? "" : "s"} •{" "}
-              {(totalBytes / (1024 * 1024)).toFixed(1)} MB on this device.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 sm:gap-3 self-start sm:self-auto flex-wrap">
-          {displayed.length > 0 && (
-            <>
-              <button
-                onClick={handlePlayAll}
-                disabled={!!busy}
-                className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-stone-950 font-bold text-xs transition-all flex items-center space-x-2 cursor-pointer shadow-md"
-              >
-                <Play className="w-3.5 h-3.5 fill-stone-950" />
-                <span>Play all</span>
-              </button>
-              <button
-                onClick={handleShuffleAll}
-                disabled={!!busy}
-                className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-200 border border-stone-800 font-semibold text-xs transition-colors flex items-center space-x-2 cursor-pointer"
-              >
-                <Shuffle className="w-3.5 h-3.5" />
-                <span>Shuffle</span>
-              </button>
-            </>
-          )}
-          <button
-            onClick={handlePickFolder}
-            disabled={!!busy}
-            className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-stone-950 font-bold text-xs transition-all flex items-center space-x-2 cursor-pointer shadow-md"
-          >
-            {busy === "pick" || busy === "scan" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderOpen className="w-3.5 h-3.5" />}
-            <span>Pick music folder</span>
-          </button>
-          {hasSavedDir && (
+      <TabHeader
+        tone="sky"
+        icon={<HardDrive className="w-4 h-4" />}
+        title="Local Music"
+        subtitle={
+          <>
+            {entries.length} local track{entries.length === 1 ? "" : "s"} •{" "}
+            {(totalBytes / (1024 * 1024)).toFixed(1)} MB on this device.
+          </>
+        }
+        actions={
+          <>
+            {displayed.length > 0 && (
+              <>
+                <button
+                  onClick={handlePlayAll}
+                  disabled={!!busy}
+                  className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-stone-950 font-bold text-xs transition-all flex items-center space-x-2 cursor-pointer shadow-md"
+                >
+                  <Play className="w-3.5 h-3.5 fill-stone-950" />
+                  <span>Play all</span>
+                </button>
+                <button
+                  onClick={handleShuffleAll}
+                  disabled={!!busy}
+                  className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-200 border border-stone-800 font-semibold text-xs transition-colors flex items-center space-x-2 cursor-pointer"
+                >
+                  <Shuffle className="w-3.5 h-3.5" />
+                  <span>Shuffle</span>
+                </button>
+              </>
+            )}
             <button
-              onClick={handleResync}
+              onClick={handlePickFolder}
               disabled={!!busy}
-              title="Re-read the saved folder (picks up new downloads)"
-              className="px-3 py-2 rounded-xl bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-300 border border-stone-800 transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-stone-950 font-bold text-xs transition-all flex items-center space-x-2 cursor-pointer shadow-md"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${busy === "scan" ? "animate-spin" : ""}`} />
+              {busy === "pick" || busy === "scan" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderOpen className="w-3.5 h-3.5" />}
+              <span>Pick music folder</span>
             </button>
-          )}
-          {entries.length > 0 && (
-            <button
-              onClick={handleForget}
-              disabled={!!busy}
-              title="Remove all local files from the library (disk untouched)"
-              className="px-3 py-2 rounded-xl bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-400 hover:text-red-400 border border-stone-800 transition-colors cursor-pointer"
-            >
-              <FolderX className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
+            {hasSavedDir && (
+              <button
+                onClick={handleResync}
+                disabled={!!busy}
+                title="Re-read the saved folder (picks up new downloads)"
+                className="px-3 py-2 rounded-xl bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-300 border border-stone-800 transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${busy === "scan" ? "animate-spin" : ""}`} />
+              </button>
+            )}
+            {entries.length > 0 && (
+              <button
+                onClick={handleForget}
+                disabled={!!busy}
+                title="Remove all local files from the library (disk untouched)"
+                className="px-3 py-2 rounded-xl bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-400 hover:text-red-400 border border-stone-800 transition-colors cursor-pointer"
+              >
+                <FolderX className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* Scan progress */}
       {progress && progress.total > 0 && (
@@ -348,8 +343,12 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
           </p>
         </div>
       ) : displayed.length === 0 ? (
-        <div className="py-12 text-center text-xs text-stone-400 bg-stone-900/30 border border-stone-800 rounded-xl">
-          No local tracks match "{searchQuery}".
+        <div className="py-12 text-center space-y-2">
+          <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 mx-auto flex items-center justify-center text-sky-400">
+            <FolderOpen className="w-4 h-4" />
+          </div>
+          <h3 className="text-sm font-bold text-stone-200">No matches</h3>
+          <p className="text-xs text-stone-400">No local tracks match "{searchQuery}".</p>
         </div>
       ) : (
         <div className="bg-stone-900/50 border border-stone-800 rounded-2xl overflow-hidden divide-y divide-stone-800/50">

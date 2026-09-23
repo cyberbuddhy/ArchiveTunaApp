@@ -180,6 +180,9 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
   return (
     <div
       id="artist-discography-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Artist discography"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
@@ -438,6 +441,8 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                               src={stream.coverUrl}
                               alt={stream.title}
                               referrerPolicy="no-referrer"
+                              loading="lazy"
+                              decoding="async"
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).src =
@@ -481,7 +486,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                                   onSelectAlbum(stream.identifier);
                                   onClose();
                                 }}
-                                className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                                className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                               >
                                 <Play className="w-3 h-3 fill-amber-300" />
                                 <span>Play Stream</span>
@@ -490,7 +495,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                               <button
                                 onClick={(e) => handleCaptureLiveTape(stream, e)}
                                 disabled={isInLib || isCapturing}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border ${
+                                className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors border ${
                                   isInLib
                                     ? "bg-stone-800 text-amber-400 border-stone-700 cursor-default"
                                     : "bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700 hover:border-stone-600 cursor-pointer"
@@ -517,7 +522,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                               <button
                                 type="button"
                                 onClick={(e) => downloadAlbumZip(stream.identifier, stream.title, e)}
-                                className="p-1 text-stone-500 hover:text-amber-400 transition-colors ml-auto cursor-pointer"
+                              className="p-1.5 rounded-lg text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition-colors ml-auto cursor-pointer"
                                 title="Download recording (ZIP)"
                               >
                                 <Download className="w-3.5 h-3.5" />
@@ -527,7 +532,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                                 href={`https://archive.org/details/${stream.identifier}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="p-1 text-stone-500 hover:text-stone-300 transition-colors ml-auto"
+                                className="p-1.5 rounded-lg text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition-colors ml-auto"
                                 title="Open on Archive.org"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
@@ -619,6 +624,8 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                             src={tape.coverUrl}
                             alt={tape.title}
                             referrerPolicy="no-referrer"
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                             onError={(e) => {
                               (e.target as HTMLImageElement).src =
@@ -666,7 +673,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                                 onSelectAlbum(tape.identifier);
                                 onClose();
                               }}
-                              className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                              className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                             >
                               <Play className="w-3 h-3 fill-amber-300" />
                               <span>Listen Show</span>
@@ -676,7 +683,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                               id={`vault-tape-${tape.identifier}`}
                               onClick={(e) => handleCaptureLiveTape(tape, e)}
                               disabled={isInLib || isCapturing}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border ${
+                              className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors border ${
                                 isInLib
                                   ? "bg-stone-800 text-amber-400 border-stone-700 cursor-default"
                                   : "bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700 hover:border-stone-600 cursor-pointer"
@@ -703,7 +710,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                             <button
                               type="button"
                               onClick={(e) => downloadAlbumZip(tape.identifier, tape.title, e)}
-                              className="p-1 text-stone-500 hover:text-amber-400 transition-colors ml-auto cursor-pointer"
+                              className="p-1.5 rounded-lg text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition-colors ml-auto cursor-pointer"
                               title="Download concert (ZIP)"
                             >
                               <Download className="w-3.5 h-3.5" />
@@ -713,7 +720,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                               href={`https://archive.org/details/${tape.identifier}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="p-1 text-stone-500 hover:text-stone-300 transition-colors ml-auto"
+                              className="p-1.5 rounded-lg text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition-colors ml-auto"
                               title="Open on Archive.org"
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
@@ -756,10 +763,12 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                         <div className="relative aspect-square rounded-lg overflow-hidden bg-stone-850 mb-2.5 shadow-inner flex items-center justify-center">
                           {release.coverUrl ? (
                             <img
-                              src={release.coverUrl}
-                              alt={release.title}
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            src={release.coverUrl}
+                            alt={release.title}
+                            referrerPolicy="no-referrer"
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               onError={(e) => {
                                 (e.target as HTMLElement).style.display = "none";
                                 const fallback = (e.target as HTMLElement).nextElementSibling;

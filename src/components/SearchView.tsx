@@ -609,6 +609,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
+              aria-label="Search Archive.org music"
               value={searchQuery}
               onChange={(e) => {
                 suppressSuggestionsRef.current = false;
@@ -630,7 +631,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   ? 'Search genre or subject (e.g., "Post-Punk", "Bebop")...'
                   : "Search any artist, album, live bootleg, or genre..."
               }
-              className="w-full pl-12 pr-44 sm:pr-60 py-3.5 bg-stone-900/90 hover:bg-stone-900 border border-stone-800 focus:border-amber-500 rounded-2xl text-sm sm:text-base text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors shadow-inner relative z-0"
+              className="w-full pl-12 pr-44 sm:pr-60 py-3.5 bg-stone-900/90 hover:bg-stone-900 border border-stone-800 focus:border-amber-500 rounded-2xl text-sm sm:text-base text-stone-100 placeholder-stone-400 focus:outline-none transition-colors shadow-inner relative z-0"
             />
 
             <div className="absolute right-2 top-2 bottom-2 flex items-center space-x-1.5 z-20">
@@ -732,7 +733,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   <button
                     type="button"
                     onClick={handleClearAllHistory}
-                    className="text-stone-500 hover:text-red-400 flex items-center gap-1 transition-colors cursor-pointer"
+                    className="text-stone-500 hover:text-red-400 flex items-center gap-1 transition-colors cursor-pointer p-1.5 rounded-lg hover:bg-stone-800"
                   >
                     <Trash2 className="w-3 h-3" />
                     <span>Clear all</span>
@@ -757,7 +758,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                       <button
                         type="button"
                         onClick={(e) => handleRemoveHistoryItem(item, e)}
-                        className="p-1 text-stone-500 hover:text-stone-300 hover:bg-stone-700/60 rounded-md transition-colors cursor-pointer"
+                        className="p-1.5 text-stone-500 hover:text-stone-300 hover:bg-stone-700/60 rounded-lg transition-colors cursor-pointer"
                         title="Remove from history"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -1149,9 +1150,12 @@ export const SearchView: React.FC<SearchViewProps> = ({
               <p className="text-xs text-stone-400">Searching master recordings from Archive.org...</p>
             </div>
           ) : results.length === 0 ? (
-            <div className="py-16 text-center rounded-2xl bg-stone-900/30 border border-stone-800 p-8 space-y-2">
-              <Disc3 className="w-8 h-8 text-stone-600 mx-auto" />
-              <p className="text-xs text-stone-400">
+            <div className="py-16 text-center space-y-3 rounded-2xl bg-stone-900/30 border border-stone-800 p-8">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 mx-auto flex items-center justify-center text-amber-400">
+                <Disc3 className="w-7 h-7" />
+              </div>
+              <h3 className="text-sm font-bold text-stone-200">No recordings found</h3>
+              <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">
                 No audio recordings found for "{activeQuery || searchQuery}" on Archive.org.
               </p>
               {(() => {
@@ -1209,6 +1213,8 @@ export const SearchView: React.FC<SearchViewProps> = ({
                         }
                         alt={item.title}
                         referrerPolicy="no-referrer"
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src =

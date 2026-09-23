@@ -125,12 +125,13 @@ describe("buildSmartMixes", () => {
     expect(most?.tracks.map((t) => t.id)).toEqual(["alb1_t2", "alb1_t1"]);
   });
 
-  it("builds forgotten favorites from stale liked albums", () => {
-    const liked = album("old", { isFavorite: true });
-    const fresh = album("new", { isFavorite: true });
+  it("builds forgotten favorites from stale top-tier albums", () => {
+    const topTier = album("old", { tier: "S" });
+    const fresh = album("new", { tier: "A" });
+    const untiered = album("plain", {});
     const now = new Date().toISOString();
     const h = [hist("new_t1", now), hist("new_t2", now)];
-    const mixes = buildSmartMixes(h, [liked, fresh]);
+    const mixes = buildSmartMixes(h, [topTier, fresh, untiered]);
     const forgotten = mixes.find((m) => m.id === "smart_forgotten");
     expect(forgotten?.tracks.map((t) => t.id)).toEqual(["old_t1", "old_t2"]);
   });

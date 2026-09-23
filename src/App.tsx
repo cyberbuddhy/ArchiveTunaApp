@@ -206,6 +206,22 @@ export default function App() {
     const loadedPlaylists = getStoredPlaylists();
     const loadedTierLists = getStoredTierLists();
     const loadedHistory = getStoredHistory();
+    // Single-axis migration: legacy likes become taste (tier A), then the
+    // flag is retired — vault membership is the only save state.
+    let migrated = false;
+    for (const a of loadedAlbums) {
+      if (a.isFavorite) {
+        if (!a.tier) {
+          a.tier = "A";
+          migrated = true;
+        }
+        if (a.isFavorite) {
+          a.isFavorite = false;
+          migrated = true;
+        }
+      }
+    }
+    if (migrated) saveStoredAlbums(loadedAlbums);
 
     setAlbums(loadedAlbums);
     setPlaylists(loadedPlaylists);
@@ -398,36 +414,21 @@ export default function App() {
     });
   }, []);
 
-  const handleToggleFavoriteFromPlayer = useCallback((albumToToggle: Album) => {
+  // Vault save from the player (single axis): adds the album to the vault
+  // when missing, never removes. Taste lives in tier ranks, not here.
+  const handleToggleSaveAlbumFromPlayer = useCallback((albumToToggle: Album) => {
     setAlbums((prev) => {
       const idx = prev.findIndex(
         (a) => a.id === albumToToggle.id || (albumToToggle.identifier && a.identifier === albumToToggle.identifier)
       );
-      let next: Album[];
       if (idx === -1) {
-        const newAlbum = { ...albumToToggle, isFavorite: true };
-        next = [newAlbum, ...prev];
-        showToast(`Saved "${newAlbum.title}" as liked in your Vault!`);
-      } else {
-        const current = prev[idx];
-        const newFav = !current.isFavorite;
-        next = [...prev];
-        next[idx] = { ...current, isFavorite: newFav };
-        showToast(
-          newFav
-            ? `Marked "${current.title}" as liked in your Vault!`
-            : `Unliked "${current.title}".`,
-          "info"
-        );
+        // Legacy flag retired: vault membership is the only save state.
+        const next = [{ ...albumToToggle, isFavorite: false }, ...prev];
+        saveStoredAlbums(next);
+        showToast(`Saved "${albumToToggle.title}" to your Vault!`);
+        return next;
       }
-      saveStoredAlbums(next);
-      return next;
-    });
-    setDetailAlbum((prev) => {
-      if (!prev) return null;
-      if (prev.id === albumToToggle.id || (albumToToggle.identifier && prev.identifier === albumToToggle.identifier)) {
-        return { ...prev, isFavorite: !prev.isFavorite };
-      }
+      showToast(`"${prev[idx].title}" is already in your vault.`, "info");
       return prev;
     });
   }, []);
@@ -543,6 +544,19 @@ export default function App() {
     const loadedPlaylists = getStoredPlaylists();
     const loadedTierLists = getStoredTierLists();
     const loadedHistory = getStoredHistory();
+    // Same single-axis migration as initial load (legacy likes → tier A).
+    let migrated = false;
+    for (const a of loadedAlbums) {
+      if (a.isFavorite) {
+        if (!a.tier) {
+          a.tier = "A";
+          migrated = true;
+        }
+        a.isFavorite = false;
+        migrated = true;
+      }
+    }
+    if (migrated) saveStoredAlbums(loadedAlbums);
     setAlbums(loadedAlbums);
     setPlaylists(loadedPlaylists);
     setTierLists(loadedTierLists);
@@ -563,7 +577,7 @@ export default function App() {
 
         {/* Global Toast Notification */}
         {toastMessage && (
-          <div className="fixed top-16 right-4 z-50 flex items-center space-x-2 px-3 py-2 rounded-lg bg-stone-900 border border-amber-500/40 text-stone-100 text-xs shadow-2xl animate-in fade-in slide-in-from-top-2">
+          <div role="status" className="fixed top-16 right-4 z-50 flex items-center space-x-2 px-3 py-2 rounded-lg bg-stone-900 border border-amber-500/40 text-stone-100 text-xs shadow-2xl animate-in fade-in slide-in-from-top-2">
             <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="font-medium">{toastMessage.text}</span>
           </div>
@@ -650,11 +664,8 @@ export default function App() {
         <PlayerBar
           onSelectAlbumForDetail={handleSelectAlbumForDetail}
           onOpenArtistDiscography={(artist) => setDiscographyArtist(artist)}
-          onToggleFavoriteAlbum={handleToggleFavoriteFromPlayer}
-          isAlbumFavorite={(id) => {
-            const a = albums.find((item) => item.id === id || item.identifier === id);
-            return !!a?.isFavorite;
-          }}
+          onToggleSaveAlbum={handleToggleSaveAlbumFromPlayer}
+          isAlbumSaved={(id) => existingAlbumIds.has(id)}
         />
         </Suspense>
 

@@ -155,10 +155,17 @@ export const Waveform: React.FC<{ playing: boolean }> = ({ playing }) => {
       ref={ref}
       width={W}
       height={H}
-      role="img"
+      role="button"
+      tabIndex={0}
       aria-label={`Audio visualizer, ${mode} mode. Activate to switch mode.`}
       title={`Visualizer: ${mode} (click to switch)`}
       onClick={cycle}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          cycle();
+        }
+      }}
       className="rounded-md bg-stone-900/60 border border-stone-800 cursor-pointer"
     />
   );

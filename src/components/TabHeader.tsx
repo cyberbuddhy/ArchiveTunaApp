@@ -15,7 +15,15 @@ interface TabHeaderProps {
   titleId?: string;
   /** Trailing affordance next to the title (e.g. rotating chevron). */
   titleExtra?: React.ReactNode;
+  /** Accent tint for the icon box. Defaults to amber. */
+  tone?: "amber" | "sky" | "emerald";
 }
+
+const TONE_BOX: Record<NonNullable<TabHeaderProps["tone"]>, string> = {
+  amber: "bg-amber-500/15 border-amber-500/30 text-amber-400",
+  sky: "bg-sky-500/15 border-sky-500/30 text-sky-400",
+  emerald: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400",
+};
 
 export const TabHeader: React.FC<TabHeaderProps> = ({
   icon,
@@ -25,10 +33,11 @@ export const TabHeader: React.FC<TabHeaderProps> = ({
   onTitleClick,
   titleId,
   titleExtra,
+  tone = "amber",
 }) => {
   const titleBlock = (
     <>
-      <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+      <div className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 ${TONE_BOX[tone]}`}>
         {icon}
       </div>
       <div className="min-w-0 flex-1">

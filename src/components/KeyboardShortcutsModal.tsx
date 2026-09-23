@@ -116,7 +116,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
           <span>Press <kbd className="px-1.5 py-0.5 rounded bg-stone-800 text-stone-300 font-mono">?</kbd> anywhere to toggle</span>
           <button
             onClick={onClose}
-            className="px-3 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors cursor-pointer"
           >
             Got it
           </button>

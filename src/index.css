@@ -5,13 +5,47 @@ html,
 body {
   overflow-x: hidden;
   max-width: 100vw;
+  /* position+width make iOS Safari actually respect the overflow lock;
+     pan-y keeps vertical scroll + pull-refresh, pinch-zoom stays allowed */
+  position: relative;
+  width: 100%;
+  touch-action: pan-y pinch-zoom;
+  -webkit-text-size-adjust: 100%;
   /* Reserve the scrollbar gutter so tab switches never shift content sideways */
   scrollbar-gutter: stable;
+}
+
+/* Phones render small: nudge the rem scale up ~6% under 640px so type and
+   rem-spaced layout grow together. px hairlines and arbitrary px text stay
+   put, which only sharpens the hierarchy. */
+@media (max-width: 640px) {
+  html {
+    font-size: 17px;
+  }
 }
 @supports (overflow: clip) {
   html,
   body {
     overflow-x: clip;
+  }
+}
+
+/* Visible keyboard focus everywhere inputs don't already show one.
+   Text fields signal focus through their own border color, so the global
+   outline skips them — one contour everywhere, never two. */
+:focus-visible:not(input):not(textarea):not(select) {
+  outline: 2px solid var(--color-accent-main);
+  outline-offset: 2px;
+}
+
+/* Respect users who ask to reduce motion — kill animation/transition globally */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 #root {

@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   X,
   Play,
-  Heart,
   Tag,
   FileText,
   Clock,
@@ -18,6 +17,8 @@ import {
   Database,
   Loader2,
   Mic,
+  ListMusic,
+  MoreVertical,
 } from "lucide-react";
 import { downloadAlbumZip, downloadTrackAudio } from "../utils/download";
 import { linkForAlbum, linkForSong } from "../services/share";
@@ -25,7 +26,7 @@ import { Album, Track, Playlist, TierRank, TierList, TierItem } from "../types";
 import { usePlayer } from "../context/PlayerContext";
 import { TIER_RANKS, TIER_CONFIG } from "../utils/tierList";
 import { offlineCache } from "../services/offlineCache";
-import { formatTime } from "../utils/format";
+import { formatTime, splitTitleSpec } from "../utils/format";
 import { currentLyricIndex, fetchLyrics, LyricsResult } from "../services/lyrics";
 
 interface AlbumDetailModalProps {
@@ -61,11 +62,13 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
   vaultAction,
   isInVault,
 }) => {
-  const { playTrack, playAlbum, currentTrack, currentTime, isPlaying } = usePlayer();
+  const { playTrack, playAlbum, addToQueue, currentTrack, currentTime, isPlaying } = usePlayer();
   const [activeTab, setActiveTab] = useState<"tracks" | "notes">("tracks");
   const [noteText, setNoteText] = useState(album?.userNotes || "");
   const [tagInput, setTagInput] = useState("");
   const [playlistMenuTrackId, setPlaylistMenuTrackId] = useState<string | null>(null);
+  const [trackMenuId, setTrackMenuId] = useState<string | null>(null);
+  const [albumMenuOpen, setAlbumMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [newSingleName, setNewSingleName] = useState("");
   const [isAddAllPlaylistOpen, setIsAddAllPlaylistOpen] = useState(false);
@@ -98,12 +101,54 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
     }
   };
 
-  // Follow the active lyric line inside its own scroll box only
+  // Follow the active lyric line inside its own scroll box only.
+  // Manual container math on purpose: scrollIntoView() would also scroll
+  // the modal / background page, stealing scroll from the UI.
   useEffect(() => {
     if (lyricsOpenId == null) return;
-    const el = lyricsScrollRef.current?.querySelector('[data-lr-active="1"]');
-    el?.scrollIntoView({ block: "nearest" });
+    const box = lyricsScrollRef.current;
+    const el = box?.querySelector('[data-lr-active="1"]') as HTMLElement | null;
+    if (!box || !el) return;
+    const elTop = el.offsetTop - box.offsetTop;
+    if (elTop < box.scrollTop) box.scrollTop = elTop - 8;
+    else if (elTop + el.offsetHeight > box.scrollTop + box.clientHeight) {
+      box.scrollTop = elTop + el.offsetHeight - box.clientHeight + 8;
+    }
   }, [lyricsOpenId, currentTime, currentTrack?.id]);
+
+  // Lock background scroll + chain inner scroll while the modal is open.
+  // NOTE: must live above the early return or React throws a hooks-order error.
+  // Lock both <html> and <body>: some browsers scroll the documentElement,
+  // so locking body alone still lets the background move behind the dialog.
+  useEffect(() => {
+    if (!isOpen) return;
+    const html = document.documentElement;
+    const prevHtml = html.style.overflow;
+    const prevBody = document.body.style.overflow;
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
+  }, [isOpen]);
+
+  // Route wheel gestures over the fixed header/tabs into the tab-content
+  // scroll box, so scrolling anywhere over the dialog scrolls the UI
+  // (streaming-style) instead of chaining to the background page.
+  const contentScrollRef = useRef<HTMLDivElement | null>(null);
+  const handlePanelWheel = (e: React.WheelEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest?.("[data-modal-scroll]")) return; // native nested scroll
+    const el = contentScrollRef.current;
+    if (!el || el.scrollHeight <= el.clientHeight) return; // nothing to scroll
+    const canDown = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+    const canUp = el.scrollTop > 0;
+    if ((e.deltaY > 0 && canDown) || (e.deltaY < 0 && canUp)) {
+      el.scrollTop += e.deltaY;
+      e.preventDefault();
+    }
+  };
 
   const copyLink = async (url: string) => {
     try {
@@ -200,13 +245,10 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
 
   if (!isOpen || !album) return null;
 
+  const { title: displayTitle, spec: titleSpec } = splitTitleSpec(album.title || "");
+
   const handleSetTier = (tier: TierRank | undefined) => {
     const updated = { ...album, tier };
-    onUpdateAlbum(updated);
-  };
-
-  const handleFavorite = () => {
-    const updated = { ...album, isFavorite: !album.isFavorite };
     onUpdateAlbum(updated);
   };
 
@@ -271,39 +313,42 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
   const formatDuration = (seconds: number) => formatTime(seconds, "--:--");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+    <div role="dialog" aria-modal="true" aria-label={`Details for ${album?.title || "album"}`} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overscroll-contain" onWheel={(e) => e.stopPropagation()} onClick={onClose}>
       <div
         id="album-detail-modal"
-        className="w-full max-w-3xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-3xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] overscroll-contain"
         onClick={(e) => e.stopPropagation()}
+        onWheel={handlePanelWheel}
       >
         {/* Top Header / Hero */}
         <div className="relative p-6 bg-gradient-to-b from-stone-850 to-stone-900 border-b border-stone-800">
           <button
             id="close-album-detail-btn"
             onClick={onClose}
+            aria-label="Close album details"
             className="absolute top-4 right-4 p-1.5 rounded-lg text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition-colors z-10"
           >
             <X className="w-5 h-5" />
           </button>
 
-          <div className="flex flex-col sm:flex-row gap-5 items-start sm:items-center">
+          <div className="flex gap-4 sm:gap-5 items-start">
             <img
               src={album.coverUrl || "https://archive.org/images/notfound.png"}
               alt={album.title}
               onError={(e) => {
                 (e.target as HTMLImageElement).src = "https://archive.org/images/notfound.png";
               }}
-              className="w-24 h-24 sm:w-32 sm:sm:h-32 rounded-xl object-cover bg-stone-950 border border-stone-800 shadow-xl shrink-0"
+              className="w-24 h-24 sm:w-36 sm:h-36 rounded-lg object-cover bg-stone-950 ring-1 ring-white/10 shadow-xl shrink-0"
             />
 
-            <div className="flex-1 min-w-0 space-y-1.5">
-              {album.year && (
-                <span className="text-xs text-stone-400 font-medium">Year: {album.year}</span>
-              )}
+            <div className="flex-1 min-w-0 flex flex-col">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-stone-500 font-semibold">
+                {album.year ? <span className="font-semibold">Album · {album.year}</span> : <span className="font-semibold">Album</span>}
+              </p>
 
-              <h2 className="text-lg sm:text-xl font-bold text-stone-100 line-clamp-1">{album.title}</h2>
-              <div className="flex items-center space-x-2">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-stone-100 line-clamp-2 leading-tight mt-1" title={album.title}>{displayTitle}</h2>
+
+              <div className="flex items-center gap-2 mt-1.5 min-w-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -311,76 +356,72 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                       onOpenArtistDiscography(album.artist);
                     }
                   }}
-                  className="text-sm font-medium text-stone-300 hover:text-amber-300 transition-colors flex items-center space-x-1.5 group/art text-left"
+                  className="text-sm font-semibold text-stone-300 hover:text-amber-300 transition-colors truncate text-left"
                   title={`Explore full discography of ${album.artist}`}
                 >
-                  <span>{album.artist}</span>
-                  <span className="text-[10px] text-amber-400/90 bg-amber-500/15 group-hover/art:bg-amber-500/25 px-1.5 py-0.5 rounded border border-amber-500/30 flex items-center space-x-1">
-                    <Disc3 className="w-3 h-3" />
-                    <span>Discography</span>
-                  </span>
+                  {album.artist}
                 </button>
+                {onOpenArtistDiscography && album.artist && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenArtistDiscography(album.artist)}
+                    className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+                  >
+                    Discography
+                  </button>
+                )}
               </div>
+              {titleSpec && (
+                <p className="text-[11px] text-stone-500 mt-1 truncate tabular-nums">
+                  {titleSpec}
+                </p>
+              )}
+            </div>
+          </div>
 
-              {/* Rating & Favorite Controls */}
-              <div className="flex items-center space-x-3 pt-1">
-                {/* Heart / Liked Button */}
-                <button
-                  id="detail-heart-btn"
-                  onClick={handleFavorite}
-                  className={`px-2.5 py-1 rounded-lg border transition-all flex items-center space-x-1.5 cursor-pointer ${
-                    album.isFavorite
-                      ? "bg-rose-500/15 border-rose-500/50 text-rose-400 hover:bg-rose-500/25"
-                      : "bg-stone-850 border-stone-750 text-stone-400 hover:text-rose-400"
-                  }`}
-                  title={album.isFavorite ? "Remove from Liked (Vault)" : "Save as Liked in Vault"}
-                >
-                  <Heart className={`w-3.5 h-3.5 ${album.isFavorite ? "fill-rose-500 text-rose-500" : ""}`} />
-                  <span className="text-xs font-medium">{album.isFavorite ? "Liked" : "Like"}</span>
-                </button>
-
-                {/* Add to Vault / In Vault */}
+          {/* Unified action row — streaming-style: primary play + like/vault + overflow left, source/share right */}
+          <div className="mt-4 flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+              <button
+                id="play-entire-album-btn"
+                onClick={() => { playAlbum(album, 0); onClose(); }}
+                className="h-9 px-4 bg-lime-400 hover:bg-lime-300 text-stone-950 font-semibold text-xs rounded-full transition-colors inline-flex items-center gap-2 shadow-md cursor-pointer"
+              >
+                <Play className="w-4 h-4 fill-stone-950" />
+                <span className="tabular-nums">Play All Tracks ({album.tracks?.length || 0})</span>
+              </button>
+              {/* Vault membership — the only save state (taste lives in tiers) */}
+                {/* Add to Vault / In Vault — tap toggles instantly (no confirm) */}
                 {isInVault ? (
-                  <span
-                    className="px-2.5 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 flex items-center space-x-1.5"
-                    title="Saved in your vault"
+                  <button
+                    id="detail-vault-toggle-btn"
+                    onClick={() => {
+                      if (onDeleteAlbum) {
+                        onDeleteAlbum(album.id);
+                        onClose();
+                      }
+                    }}
+                    className="h-9 inline-flex items-center gap-1.5 px-3 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:text-red-300 hover:border-red-500/30 hover:bg-red-500/10 text-xs font-semibold transition-colors cursor-pointer"
+                    title="Remove from your vault"
+                    aria-label="Remove from your vault"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span className="text-xs font-medium">In Vault</span>
-                  </span>
+                    <span>In Vault</span>
+                  </button>
                 ) : (
                   <button
                     id="detail-add-to-vault-btn"
                     onClick={() => onUpdateAlbum(album)}
-                    className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm"
+                    className="h-9 px-3 rounded-full border border-white/10 text-stone-300 hover:text-stone-100 hover:border-white/20 hover:bg-white/5 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
                     title="Save this album to your vault"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span className="text-xs font-bold">Add to Vault</span>
+                    <span className="text-xs font-semibold">Add to Vault</span>
                   </button>
                 )}
 
-                {/* Rate Button & Tier List Deployer Panel */}
+                {/* Rate / Tier List panel (opened from the ⋮ menu below) */}
                 <div className="relative">
-                  <button
-                    id="detail-rate-tier-btn"
-                    onClick={() => {
-                      setIsRateTierListOpen(!isRateTierListOpen);
-                      setIsAddAllPlaylistOpen(false);
-                    }}
-                    className={`px-2.5 py-1 rounded-lg border transition-all flex items-center space-x-1.5 cursor-pointer ${
-                      album.tier
-                        ? `${TIER_CONFIG[album.tier].bgClass} text-black border-transparent shadow-sm font-black`
-                        : "bg-stone-850 border-stone-750 text-stone-300 hover:text-amber-300 hover:border-amber-500/40"
-                    }`}
-                    title="Rate album & add to Tier Lists"
-                  >
-                    <Layers className={`w-3.5 h-3.5 ${album.tier ? "text-black" : "text-amber-400"}`} />
-                    <span className="text-xs font-semibold">
-                      {album.tier ? `${album.tier} Tier` : "Rate / Tier List"}
-                    </span>
-                  </button>
-
                   {isRateTierListOpen && (
                     <div className="absolute left-0 top-full mt-1.5 w-72 sm:w-80 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-3 z-50 text-xs space-y-3 animate-in fade-in">
                       <div className="flex items-center justify-between pb-1 border-b border-stone-850">
@@ -501,7 +542,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                                             setTimeout(() => setTierFeedback(null), 2000);
                                           }
                                         }}
-                                        className="p-1 text-stone-500 hover:text-red-400 rounded transition-colors cursor-pointer"
+                                        className="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-stone-800 transition-colors cursor-pointer"
                                         title="Remove from this Tier List"
                                       >
                                         <Trash2 className="w-3.5 h-3.5" />
@@ -630,44 +671,16 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                     </div>
                   )}
                 </div>
-
-                {album.archiveUrl && (
-                  <a
-                    href={album.archiveUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-stone-400 hover:text-amber-400 flex items-center space-x-1 ml-auto"
-                  >
-                    <span>Archive.org</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-                <button
-                  onClick={() => copyLink(linkForAlbum(album.identifier || album.id))}
-                  className="p-1 rounded text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition-colors cursor-pointer"
-                  title="Copy shareable album link"
-                  aria-label="Copy shareable album link"
-                >
-                  {linkCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
-                </button>
               </div>
 
-              {/* Action Buttons: Play All, Add All to Playlist, Download ZIP */}
-              <div className="pt-2 flex flex-wrap items-center gap-2.5">
-                <button
-                  id="play-entire-album-btn"
-                  onClick={() => { playAlbum(album, 0); onClose(); }}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-xl transition-colors flex items-center space-x-2 shadow-md cursor-pointer"
-                >
-                  <Play className="w-4 h-4 fill-stone-950" />
-                  <span>Play All Tracks ({album.tracks?.length || 0})</span>
-                </button>
+              {/* Overflow + library actions: more menu, delete — same baseline as play/like */}
+              <div className="flex items-center gap-2 flex-wrap">
 
                 {/* Shared-mixtape vault action replaces Add All to Playlist */}
                 {vaultAction ? (
                   <button
                     onClick={vaultAction.onAction}
-                    className="px-3 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm"
+                    className="h-9 px-3 rounded-full border border-white/10 text-stone-200 hover:border-white/20 hover:bg-white/5 font-semibold text-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer"
                     title="Save this shared playlist to your vault"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -676,18 +689,78 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                 ) : (
                 <div className="relative">
                   <button
-                    id="add-all-songs-to-playlist-btn"
-                    onClick={() => {
-                      setPlaylistMenuTrackId(null);
-                      setMenuPos(null);
-                      setIsAddAllPlaylistOpen(!isAddAllPlaylistOpen);
-                    }}
-                    className="px-3 py-2 bg-stone-850 hover:bg-stone-800 text-stone-200 hover:text-amber-400 font-medium text-xs rounded-xl border border-stone-750 transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm"
-                    title="Add all songs in this album to a playlist"
+                    type="button"
+                    onClick={() => setAlbumMenuOpen(!albumMenuOpen)}
+                    className="w-9 h-9 rounded-full grid place-items-center border border-white/10 text-stone-400 hover:text-stone-100 hover:border-white/20 hover:bg-white/5 transition-colors cursor-pointer"
+                    title="More album options"
+                    aria-label="More album options"
                   >
-                    <ListPlus className="w-3.5 h-3.5" />
-                    <span>Add All to Playlist</span>
+                    <MoreVertical className="w-4 h-4" />
                   </button>
+                  {albumMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-30" onClick={() => setAlbumMenuOpen(false)} />
+                      <div className="absolute right-0 top-full mt-1 w-52 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 z-40 space-y-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAlbumMenuOpen(false);
+                            setIsAddAllPlaylistOpen(false);
+                            setIsRateTierListOpen(true);
+                          }}
+                          className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+                        >
+                          <Layers className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Rate / Tier List{album.tier ? ` (${album.tier})` : ""}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAlbumMenuOpen(false);
+                            setIsRateTierListOpen(false);
+                            setPlaylistMenuTrackId(null);
+                            setMenuPos(null);
+                            setIsAddAllPlaylistOpen(true);
+                          }}
+                          className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+                        >
+                          <ListPlus className="w-3.5 h-3.5 text-stone-500" />
+                          <span>Add All to Playlist</span>
+                        </button>
+                        {album.tracks && album.tracks.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => { setAlbumMenuOpen(false); handleCacheEntireAlbum(); }}
+                            disabled={isCachingEntireAlbum}
+                            className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors disabled:opacity-50"
+                          >
+                            {isCachingEntireAlbum ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                            ) : (
+                              <Database className={`w-3.5 h-3.5 ${cachedTrackIds.size === album.tracks.length ? "text-emerald-400" : "text-stone-500"}`} />
+                            )}
+                            <span>
+                              {isCachingEntireAlbum
+                                ? `Caching (${cachingAlbumProgress?.current}/${cachingAlbumProgress?.total})…`
+                                : cachedTrackIds.size === album.tracks.length
+                                ? "Cached Offline"
+                                : cachedTrackIds.size > 0
+                                ? `Pin Offline (${cachedTrackIds.size}/${album.tracks.length})`
+                                : "Pin Offline"}
+                            </span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => { setAlbumMenuOpen(false); downloadAlbumZip(album.id, album.title, e); }}
+                          className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+                        >
+                          <Download className="w-3.5 h-3.5 text-stone-500" />
+                          <span>Download (ZIP)</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
 
                   {isAddAllPlaylistOpen && (
                     <div className="absolute left-0 top-full mt-1.5 w-60 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-2 z-50 text-xs space-y-1.5 animate-in fade-in">
@@ -774,60 +847,6 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                 </div>
                 )}
 
-                {/* Offline Cache: Pin Entire Album */}
-                {album.tracks && album.tracks.length > 0 && (
-                  <button
-                    id="cache-entire-album-btn"
-                    type="button"
-                    onClick={handleCacheEntireAlbum}
-                    disabled={isCachingEntireAlbum}
-                    className={`px-3 py-2 font-medium text-xs rounded-xl border transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm ${
-                      cachedTrackIds.size === album.tracks.length
-                        ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
-                        : isCachingEntireAlbum
-                        ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
-                        : "bg-stone-850 hover:bg-stone-800 text-stone-200 hover:text-emerald-400 border-stone-750"
-                    }`}
-                    title={
-                      cachedTrackIds.size === album.tracks.length
-                        ? "All tracks stored offline in OPFS/IndexedDB. Click to unpin."
-                        : isCachingEntireAlbum
-                        ? "Caching tracks to local storage..."
-                        : "Pin all tracks in this album for offline playback"
-                    }
-                  >
-                    {isCachingEntireAlbum ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                        <span>
-                          Caching ({cachingAlbumProgress?.current}/{cachingAlbumProgress?.total})...
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Database className={`w-3.5 h-3.5 ${cachedTrackIds.size === album.tracks.length ? "fill-emerald-500/30" : ""}`} />
-                        <span>
-                          {cachedTrackIds.size === album.tracks.length
-                            ? "Cached Offline"
-                            : cachedTrackIds.size > 0
-                            ? `Pin Offline (${cachedTrackIds.size}/${album.tracks.length})`
-                            : "Pin Offline"}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                )}
-
-                <button
-                  id="download-entire-album-btn"
-                  onClick={(e) => downloadAlbumZip(album.id, album.title, e)}
-                  className="px-3 py-2 bg-stone-850 hover:bg-stone-800 text-stone-200 hover:text-amber-400 font-medium text-xs rounded-xl border border-stone-750 transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm"
-                  title="Download full album as ZIP from Archive.org"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download (ZIP)</span>
-                </button>
-
                 {onDeleteAlbum && (
                   <button
                     onClick={() => {
@@ -836,15 +855,37 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                         onClose();
                       }
                     }}
-                    className="p-2 rounded-xl text-stone-500 hover:text-red-400 hover:bg-stone-800 transition-colors cursor-pointer"
+                    className="w-9 h-9 rounded-full grid place-items-center border border-white/10 text-stone-500 hover:text-red-400 hover:border-red-500/30 hover:bg-white/5 transition-colors cursor-pointer"
                     title="Remove album from library"
+                    aria-label="Remove album from library"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}
               </div>
+
+              {/* Source + share — muted right side, streaming-style secondary */}
+              <div className="ml-auto flex items-center gap-1.5">
+                {album.archiveUrl && (
+                  <a
+                    href={album.archiveUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="h-9 inline-flex items-center gap-1 px-2.5 rounded-full text-xs text-stone-500 hover:text-amber-300 hover:bg-white/5 transition-colors"
+                  >
+                    Archive.org <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+                <button
+                  onClick={() => copyLink(linkForAlbum(album.identifier || album.id))}
+                  className="w-9 h-9 rounded-full grid place-items-center border border-white/10 text-stone-500 hover:text-amber-300 hover:border-white/20 hover:bg-white/5 transition-colors cursor-pointer"
+                  title="Copy shareable album link"
+                  aria-label="Copy shareable album link"
+                >
+                  {linkCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
-          </div>
 
           {/* Navigation Tabs */}
           <div className="flex space-x-4 border-t border-stone-800/80 mt-4 pt-3 text-xs font-medium">
@@ -872,9 +913,9 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
         </div>
 
         {/* Tab Content */}
-        <div className="p-6 overflow-y-auto flex-1">
+        <div ref={contentScrollRef} data-modal-scroll className="px-3 sm:px-4 py-3 overflow-y-auto overscroll-contain flex-1 min-h-0">
           {activeTab === "tracks" && (
-            <div className="space-y-1">
+            <div className="divide-y divide-white/5">
               {(!album.tracks || album.tracks.length === 0) ? (
                 <div className="py-12 text-center text-xs text-stone-500">
                   No streaming audio tracks detected for this recording.
@@ -886,16 +927,20 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                   return (
                     <React.Fragment key={track.id || idx}>
                     <div
-                      className={`group flex items-center justify-between p-2.5 rounded-xl transition-colors ${
+                      className={`group relative flex items-center gap-3 px-3 py-2 rounded-lg transition-colors border ${
                         isCurrent
-                          ? "bg-amber-500/10 text-amber-300 border border-amber-500/20"
-                          : "hover:bg-stone-800/60 text-stone-200"
+                          ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                          : "border-transparent hover:bg-white/5 text-stone-200"
                       }`}
                     >
-                      <div className="flex items-center space-x-3 min-w-0 flex-1">
+                      <span className="w-6 shrink-0 text-right text-[11px] tabular-nums text-stone-600">
+                        {track.trackNumber || idx + 1}
+                      </span>
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <button
                           onClick={() => { playTrack(track, album, album.tracks); onClose(); }}
-                          className="w-7 h-7 rounded-lg bg-stone-800 group-hover:bg-amber-500 group-hover:text-stone-950 text-stone-300 flex items-center justify-center shrink-0 transition-colors"
+                          aria-label={`Play ${track.title}`}
+                          className="w-8 h-8 rounded-full bg-white/5 group-hover:bg-amber-500 group-hover:text-stone-950 text-stone-300 grid place-items-center shrink-0 transition-colors"
                         >
                           {isCurrent && isPlaying ? (
                             <div className="flex items-center space-x-0.5">
@@ -908,100 +953,109 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                         </button>
 
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium truncate">{track.title}</p>
-                          <p className="text-[11px] text-stone-500 truncate">{track.artist}</p>
+                          <p className="text-[13px] font-medium truncate leading-tight">{track.title}</p>
+                          <p className="text-[11px] text-stone-500 truncate leading-tight mt-0.5">{track.artist}</p>
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-2.5 text-xs text-stone-400 shrink-0 ml-4">
-                        <span className="text-[11px] text-stone-500">{track.format || "MP3"}</span>
-                        <span className="font-mono text-[11px]">{formatDuration(track.duration)}</span>
+                      <div className="flex items-center gap-3 text-xs text-stone-400 shrink-0 ml-2">
+                        <span className="hidden sm:inline w-12 text-right text-[10px] uppercase tracking-wide text-stone-600">{track.format || "MP3"}</span>
+                        <span className="w-12 text-right text-[11px] tabular-nums text-stone-500">{formatDuration(track.duration)}</span>
 
-                        {/* Offline Pin Toggle */}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleTrackPin(track)}
-                          disabled={cachingTrackIds.has(track.id)}
-                          className={`p-1 rounded transition-colors cursor-pointer ${
-                            cachedTrackIds.has(track.id)
-                              ? "text-emerald-400 hover:text-emerald-300 bg-emerald-500/15"
-                              : cachingTrackIds.has(track.id)
-                              ? "text-amber-400 bg-amber-500/10 animate-pulse"
-                              : "text-stone-500 hover:text-emerald-400 hover:bg-stone-800"
-                          }`}
-                          title={
-                            cachedTrackIds.has(track.id)
-                              ? "Cached offline (OPFS / IndexedDB). Click to remove."
-                              : cachingTrackIds.has(track.id)
-                              ? "Caching track for offline playback..."
-                              : "Pin track offline"
-                          }
-                        >
-                          {cachingTrackIds.has(track.id) ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                          ) : (
-                            <Database className={`w-3.5 h-3.5 ${cachedTrackIds.has(track.id) ? "fill-emerald-500/30" : ""}`} />
-                          )}
-                        </button>
-
-                        {(track.audioUrl || track.streamUrl) && (
+                        {/* Overflow menu: pin, download, link, lyrics, playlist */}
+                        <div className="relative">
                           <button
-                            onClick={(e) => downloadTrackAudio((track.audioUrl || track.streamUrl)!, `${album.artist} - ${track.title}`, e)}
-                            className="p-1 rounded text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition-colors cursor-pointer"
-                            title="Download Track (MP3)"
+                            type="button"
+                            onClick={() => setTrackMenuId(trackMenuId === track.id ? null : track.id)}
+                            className="p-1.5 rounded-full text-stone-500 hover:text-stone-100 hover:bg-white/10 transition-colors cursor-pointer sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
+                            title="More options"
+                            aria-label="More options"
                           >
-                            <Download className="w-3.5 h-3.5" />
+                            <MoreVertical className="w-4 h-4" />
                           </button>
-                        )}
-
-                        <button
-                          onClick={() => copyLink(linkForSong(album.identifier || album.id, track.trackNumber || idx + 1))}
-                          className="p-1 rounded text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition-colors cursor-pointer"
-                          title="Copy shareable song link"
-                          aria-label="Copy shareable song link"
-                        >
-                          {linkCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
-                        </button>
-
-                        <button
-                          onClick={() => handleToggleLyrics(track)}
-                          className={`p-1 rounded transition-colors cursor-pointer ${
-                            lyricsOpenId === track.id
-                              ? "text-amber-400 bg-amber-500/10"
-                              : "text-stone-500 hover:text-amber-400 hover:bg-stone-800"
-                          }`}
-                          title="Show lyrics"
-                          aria-label="Show lyrics"
-                        >
-                          <Mic className="w-3.5 h-3.5" />
-                        </button>
+                          {trackMenuId === track.id && (
+                            <>
+                              <div className="fixed inset-0 z-30" onClick={() => setTrackMenuId(null)} />
+                              <div className="absolute right-0 top-full mt-1 w-52 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 z-40 space-y-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => { handleToggleTrackPin(track); setTrackMenuId(null); }}
+                                  disabled={cachingTrackIds.has(track.id)}
+                                  className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors disabled:opacity-50"
+                                >
+                                  {cachingTrackIds.has(track.id) ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                                  ) : (
+                                    <Database className={`w-3.5 h-3.5 ${cachedTrackIds.has(track.id) ? "text-emerald-400" : "text-stone-500"}`} />
+                                  )}
+                                  <span>
+                                    {cachedTrackIds.has(track.id)
+                                      ? "Remove offline pin"
+                                      : cachingTrackIds.has(track.id)
+                                      ? "Caching…"
+                                      : "Pin offline"}
+                                  </span>
+                                </button>
+                                {(track.audioUrl || track.streamUrl) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { downloadTrackAudio((track.audioUrl || track.streamUrl)!, `${album.artist} - ${track.title}`, e); setTrackMenuId(null); }}
+                                    className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+                                  >
+                                    <Download className="w-3.5 h-3.5 text-stone-500" />
+                                    <span>Download</span>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => { addToQueue(track); setTrackMenuId(null); }}
+                                  className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+                                >
+                                  <ListMusic className="w-3.5 h-3.5 text-stone-500" />
+                                  <span>Add to Playback Queue</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { copyLink(linkForSong(album.identifier || album.id, track.trackNumber || idx + 1)); setTrackMenuId(null); }}
+                                  className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+                                >
+                                  {linkCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-stone-500" />}
+                                  <span>Copy link</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { handleToggleLyrics(track); setTrackMenuId(null); }}
+                                  className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+                                >
+                                  <Mic className={`w-3.5 h-3.5 ${lyricsOpenId === track.id ? "text-amber-400" : "text-stone-500"}`} />
+                                  <span>Lyrics</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    setTrackMenuId(null);
+                                    setIsAddAllPlaylistOpen(false);
+                                    const r = e.currentTarget.getBoundingClientRect();
+                                    const w = 224;
+                                    setMenuPos({
+                                      top: Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 240)),
+                                      left: Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)),
+                                    });
+                                    setPlaylistMenuTrackId(track.id);
+                                    setNewSingleName("");
+                                  }}
+                                  className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+                                >
+                                  <Plus className="w-3.5 h-3.5 text-stone-500" />
+                                  <span>Add to playlist</span>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
 
                         {/* Add to Playlist Popup (viewport-anchored, never clipped) */}
                         <div>
-                          <button
-                            onClick={(e) => {
-                              if (playlistMenuTrackId === track.id) {
-                                setPlaylistMenuTrackId(null);
-                                setMenuPos(null);
-                                return;
-                              }
-                              setIsAddAllPlaylistOpen(false);
-                              const r = e.currentTarget.getBoundingClientRect();
-                              const w = 224;
-                              setMenuPos({
-                                top: Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 240)),
-                                left: Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)),
-                              });
-                              setPlaylistMenuTrackId(track.id);
-                              setNewSingleName("");
-                            }}
-                            className="p-1 rounded text-stone-500 hover:text-stone-200 hover:bg-stone-800"
-                            title="Add track to playlist"
-                            aria-label="Add track to playlist"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-
                           {playlistMenuTrackId === track.id && menuPos && (
                             <>
                               <div className="fixed inset-0 z-40" onClick={() => { setPlaylistMenuTrackId(null); setMenuPos(null); }} />

@@ -114,7 +114,7 @@ export const TierBadgePicker: React.FC<TierBadgePickerProps> = ({
                 onSelectTier(undefined);
                 setIsOpen(false);
               }}
-              className="p-1 rounded text-stone-500 hover:text-red-400 hover:bg-stone-900 transition-colors ml-0.5 cursor-pointer"
+              className="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-stone-900 transition-colors ml-0.5 cursor-pointer"
               title="Clear Tier"
             >
               <X className="w-3.5 h-3.5" />

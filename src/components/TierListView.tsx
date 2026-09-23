@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Album, TierList, TierItem, TierRank } from "../types";
 import { usePlayer } from "../context/PlayerContext";
+import { fetchAlbumDetails } from "../services/api";
 import {
   TIER_RANKS,
   TIER_CONFIG,
@@ -147,7 +148,7 @@ export const TierListView: React.FC<TierListViewProps> = ({
           <button
             id="new-tier-list-btn"
             onClick={() => setIsCreatingList(true)}
-            className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs flex items-center space-x-1 cursor-pointer transition-colors"
+            className="p-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs flex items-center space-x-1 cursor-pointer transition-colors"
             title="Create new Tier List"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -187,7 +188,7 @@ export const TierListView: React.FC<TierListViewProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-md"
+                className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-xl"
               >
                 Create
               </button>
@@ -201,7 +202,16 @@ export const TierListView: React.FC<TierListViewProps> = ({
           {tierLists.map((tl) => (
             <div
               key={tl.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`Open tier list ${tl.name}`}
               onClick={() => setSelectedListId(tl.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setSelectedListId(tl.id);
+                }
+              }}
               className={`group p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
                 selectedListId === tl.id
                   ? "bg-amber-500/10 border-amber-500/30 text-amber-300 shadow-sm"
@@ -226,7 +236,7 @@ export const TierListView: React.FC<TierListViewProps> = ({
                       }
                     }
                 }}
-                className="p-1 text-stone-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-stone-800 opacity-0 group-hover:opacity-100 transition-opacity"
                 title="Delete Tier List"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -373,8 +383,18 @@ export const TierListView: React.FC<TierListViewProps> = ({
                           setDraggedAlbumId(null);
                           setActiveDropTier(null);
                         }}
-                        onClick={() => {
-                          if (fullAlbum) onSelectAlbumForDetail(fullAlbum);
+                        onClick={async () => {
+                          if (!fullAlbum) return;
+                          if ((!fullAlbum.tracks || fullAlbum.tracks.length === 0) && fullAlbum.identifier) {
+                            try {
+                              const fresh = await fetchAlbumDetails(fullAlbum.identifier);
+                              onSelectAlbumForDetail(fresh);
+                              return;
+                            } catch {
+                              // fall through to the stored copy
+                            }
+                          }
+                          onSelectAlbumForDetail(fullAlbum);
                         }}
                         className="group relative w-20 sm:w-24 shrink-0 flex flex-col items-center cursor-grab active:cursor-grabbing select-none transition-transform hover:scale-105"
                         title={`${item.albumTitle} by ${item.artist} (Drag to change tier, click for details)`}
@@ -389,6 +409,8 @@ export const TierListView: React.FC<TierListViewProps> = ({
                             }
                             alt={item.albumTitle}
                             referrerPolicy="no-referrer"
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover"
                             onError={(e) => {
                               (e.target as HTMLImageElement).src =

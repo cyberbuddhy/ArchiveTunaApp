@@ -4,8 +4,8 @@ import { recordListen } from "../services/storage";
 import { getStoredPlayerSettings, savePlayerSettings, PlayerSettings } from "../services/playerSettings";
 import { audioEngine } from "../services/audioEngine";
 import { offlineCache } from "../services/offlineCache";
-import { isNativePlatform, showNowPlaying, updatePlayingState, ensureNativeControlsListener } from "../services/nativeAudio";
 import { fetchAlbumDetails } from "../services/api";
+import { isNativePlatform, showNowPlaying, updatePlayingState, ensureNativeControlsListener } from "../services/nativeAudio";
 
 export type RepeatMode = "off" | "all" | "one";
 

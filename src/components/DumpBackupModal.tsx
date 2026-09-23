@@ -114,7 +114,7 @@ export const DumpBackupModal: React.FC<DumpBackupModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+    <div role="dialog" aria-modal="true" aria-label="Library backup and restore" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
       <div
         id="backup-dump-modal"
         className="w-full max-w-2xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
@@ -134,6 +134,7 @@ export const DumpBackupModal: React.FC<DumpBackupModalProps> = ({
           <button
             id="close-dump-modal-btn"
             onClick={onClose}
+            aria-label="Close backup dialog"
             className="p-1.5 rounded-lg text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -304,7 +305,7 @@ export const DumpBackupModal: React.FC<DumpBackupModalProps> = ({
                       onClick={() => setRestoreMode("replace")}
                       className={`p-2.5 rounded-lg border text-left text-xs transition-colors ${
                         restoreMode === "replace"
-                          ? "border-red-500/80 bg-red-500/10 text-red-300"
+                          ? "border-rose-500/80 bg-rose-500/10 text-rose-300"
                           : "border-stone-800 bg-stone-950 text-stone-400 hover:border-stone-700"
                       }`}
                     >

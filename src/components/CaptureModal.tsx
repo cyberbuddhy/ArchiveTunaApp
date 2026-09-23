@@ -59,7 +59,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
   const isAlreadyInLibrary = previewAlbum ? existingAlbumIds.has(previewAlbum.id) : false;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+    <div role="dialog" aria-modal="true" aria-label="Capture music album" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div
         id="capture-modal-container"
         className="w-full max-w-xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
@@ -76,6 +76,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
           <button
             id="close-capture-modal-btn"
             onClick={onClose}
+            aria-label="Close capture dialog"
             className="p-1.5 rounded-lg text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -95,7 +96,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
           <form onSubmit={handleResolve} className="space-y-3">
             <div className="flex gap-2">
               {(["auto", "mp3", "flac"] as IngestQuality[]).map((q) => (
-                <button key={q} type="button" onClick={() => setQuality(q)} className={`px-2 py-1 text-[11px] rounded-lg border cursor-pointer ${quality === q ? "bg-amber-500 text-stone-950 border-amber-500 font-bold" : "bg-stone-950 text-stone-400 border-stone-800"}`}>{q.toUpperCase()}</button>
+                <button key={q} type="button" onClick={() => setQuality(q)} className={`px-2.5 py-1.5 text-[11px] rounded-xl border cursor-pointer transition-colors ${quality === q ? "bg-amber-500 text-stone-950 border-amber-500 font-bold" : "bg-stone-950 text-stone-400 border-stone-800 hover:text-stone-200"}`}>{q.toUpperCase()}</button>
               ))}
               <span className="text-[10px] text-stone-500 self-center">format negotiation · ID3 preserved</span>
             </div>
@@ -109,13 +110,14 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                 value={inputUrl}
                 onChange={(e) => setInputUrl(e.target.value)}
                 placeholder="https://archive.org/details/identifier or identifier"
+                aria-label="Archive.org URL or identifier to capture"
                 className="w-full pl-10 pr-24 py-3 bg-stone-950 border border-stone-800 rounded-xl text-stone-100 placeholder-stone-600 focus:outline-none focus:border-amber-500 text-sm"
               />
               <button
                 id="fetch-album-btn"
                 type="submit"
                 disabled={isLoading || !inputUrl.trim()}
-                className="absolute right-2 top-2 bottom-2 px-4 bg-amber-500 hover:bg-amber-400 disabled:bg-stone-800 text-stone-950 disabled:text-stone-600 font-medium text-xs rounded-lg transition-colors flex items-center space-x-1.5"
+                className="absolute right-2 top-2 bottom-2 px-4 bg-amber-500 hover:bg-amber-400 disabled:bg-stone-800 text-stone-950 disabled:text-stone-600 font-medium text-xs rounded-xl transition-colors flex items-center space-x-1.5"
               >
                 {isLoading ? (
                   <>
