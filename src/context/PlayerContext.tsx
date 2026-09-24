@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect } from "react";
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { Track, Album } from "../types";
 import { recordListen } from "../services/storage";
 import { getStoredPlayerSettings, savePlayerSettings, PlayerSettings } from "../services/playerSettings";
@@ -29,6 +29,7 @@ interface PlayerContextType {
   togglePinCurrentTrack: () => Promise<void>;
   playTrack: (track: Track, album?: Album, newQueue?: Track[]) => void;
   playAlbum: (album: Album, startIndex?: number) => void;
+  playRelated: (seed: Track, album?: Album) => void;
   togglePlay: () => void;
   seek: (time: number) => void;
   skipSeconds: (seconds: number) => void;
@@ -460,6 +461,25 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     loadAndPlay(validTracks[validIndex], album);
   };
 
+  // Radio mode: replace the queue with the seed, then line up related
+  // tracks behind it. The seed plays instantly; related append when the
+  // fetch lands (unless the user has already moved on).
+  const playRelated = useCallback(async (seed: Track, album?: Album) => {
+    if (!seed) return;
+    playTrack(seed, album, [seed]);
+    try {
+      const { fetchRelatedTracks } = await import("../services/autoplay");
+      const rel = await fetchRelatedTracks(seed, [], 8);
+      if (!rel.length) return;
+      if (stateRef.current.currentTrack?.id !== seed.id) return; // moved on
+      setQueue((prev) => {
+        if (prev[0]?.id !== seed.id) return prev; // replaced meanwhile
+        const ids = new Set(prev.map((t) => t?.id));
+        return [...prev, ...rel.filter((t) => t && !ids.has(t.id))];
+      });
+    } catch { /* seed keeps playing solo — offline or upstream hiccup */ }
+  }, []);
+
   const togglePlay = () => {
     if (!audioRef.current || !currentTrack) return;
     if (isPlaying) {
@@ -859,6 +879,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         togglePinCurrentTrack,
         playTrack,
         playAlbum,
+        playRelated,
         togglePlay,
         seek,
         skipSeconds,

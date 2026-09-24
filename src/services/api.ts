@@ -47,6 +47,24 @@ export function computeRelevanceScore(
   return score;
 }
 
+// Fail-fast JSON fetch: archive.org advancedsearch can stall for minutes.
+// Every caller already treats a throw as "empty result", so aborting early
+// turns an infinite spinner into an empty state instead.
+export async function fetchArchiveJson(url: string, timeoutMs = 12000): Promise<any> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`Archive.org returned status ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function searchArchive(params: {
   query?: string;
   field?: string;
@@ -55,8 +73,7 @@ export async function searchArchive(params: {
   sort?: string;
   page?: number;
   rows?: number;
-}) {
-  const query = (params.query || "").trim();
+}) {  const query = (params.query || "").trim();
   const collection = (params.collection || "").trim();
   const field = (params.field || "all").trim();
   const era = (params.era || "all").trim();
@@ -205,17 +222,8 @@ export async function searchArchive(params: {
   searchUrl.searchParams.append("fl[]", "genre");
   searchUrl.searchParams.append("fl[]", "subject");
 
-  const response = await fetch(searchUrl.toString(), {
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Archive.org returned status ${response.status}`);
-  }
-
-  const data = await response.json();
+  const response = await fetchArchiveJson(searchUrl.toString());
+  const data = response;
   const docs = data?.response?.docs || [];
   const numFound = data?.response?.numFound || 0;
 
@@ -955,12 +963,8 @@ export async function getDiscoveries(history: any[] = [], library: Album[] = [])
         sUrl.searchParams.append("fl[]", "downloads");
         sUrl.searchParams.append("fl[]", "collection");
 
-        const res = await fetch(sUrl.toString(), {
-          headers: { Accept: "application/json" },
-        });
-
-        if (res.ok) {
-          const data = await res.json();
+        const data = await fetchArchiveJson(sUrl.toString());
+        {
           const docs = data?.response?.docs || [];
           docs.forEach((doc: any) => {
             verifiedItems.push({
@@ -990,4 +994,63 @@ export async function getDiscoveries(history: any[] = [], library: Album[] = [])
     discoveries: curatedDiscoveries,
     liveArchivedMatches: verifiedItems,
   };
+}
+
+// Time Capsules: fixed era snapshots (label year + genre terms). Year ranges
+// are ±2 around the label — era-centered for hit rate, serverless like the rest.
+export interface TimeCapsule {
+  label: string;
+  era: string;
+  blurb: string;
+  query: string;
+}
+
+export interface TimeCapsuleShelf extends TimeCapsule {
+  items: Array<{
+    identifier: string;
+    title: string;
+    artist: string;
+    year: string;
+    coverUrl: string;
+  }>;
+}
+
+export const TIME_CAPSULES: TimeCapsule[] = [
+  { label: "1990 · House", era: "1990", blurb: "Warehouse grooves at their peak", query: "year:[1988 TO 1992] AND (house)" },
+  { label: "1985 · Disco", era: "1985", blurb: "Mirrorball afterglow", query: "year:[1983 TO 1987] AND (disco)" },
+  { label: "1977 · Punk", era: "1977", blurb: "Three chords, no future", query: "year:[1975 TO 1979] AND (punk)" },
+  { label: "1969 · Rock", era: "1969", blurb: "Woodstock summer", query: "year:[1967 TO 1971] AND (rock)" },
+  { label: "1971 · Soul & Funk", era: "1971", blurb: "Deep grooves, horn sections", query: "year:[1969 TO 1973] AND (soul OR funk)" },
+  { label: "1982 · Synth-Pop", era: "1982", blurb: "Neon keys and drum machines", query: "year:[1980 TO 1984] AND (synth OR \"new wave\")" },
+  { label: "1967 · Psychedelia", era: "1967", blurb: "Summer of love static", query: "year:[1965 TO 1969] AND (psychedelic OR \"acid rock\")" },
+  { label: "1973 · Prog Rock", era: "1973", blurb: "Side-long odysseys", query: "year:[1971 TO 1975] AND (progressive OR prog)" },
+  { label: "1988 · Hip-Hop", era: "1988", blurb: "Golden age boom-bap", query: "year:[1986 TO 1990] AND (hip-hop OR rap)" },
+  { label: "1994 · Grunge & Alt", era: "1994", blurb: "Flannel and feedback", query: "year:[1992 TO 1996] AND (grunge OR alternative)" },
+  { label: "2005 · Indie", era: "2005", blurb: "Blog-rock and netlabel gems", query: "year:[2003 TO 2007] AND (indie OR lo-fi)" },
+];
+
+export async function fetchTimeCapsules(rows = 6): Promise<TimeCapsuleShelf[]> {
+  const shelves = await Promise.allSettled(
+    TIME_CAPSULES.map(async (cap) => {
+      const sUrl = new URL("https://archive.org/advancedsearch.php");
+      sUrl.searchParams.set("q", `mediatype:audio AND (${cap.query})`);
+      sUrl.searchParams.set("output", "json");
+      sUrl.searchParams.set("rows", String(rows));
+      sUrl.searchParams.set("sort[]", "downloads desc");
+      ["identifier", "title", "creator", "year"].forEach((f) => sUrl.searchParams.append("fl[]", f));
+      const data = await fetchArchiveJson(sUrl.toString());
+      const items = (data?.response?.docs || []).map((doc: any) => ({
+        identifier: doc.identifier,
+        title: doc.title || doc.identifier,
+        artist: doc.creator || "Unknown Artist",
+        year: doc.year || "",
+        coverUrl: `https://archive.org/services/img/${doc.identifier}`,
+      }));
+      return { ...cap, items };
+    })
+  );
+  return shelves
+    .filter((r): r is PromiseFulfilledResult<TimeCapsuleShelf> => r.status === "fulfilled")
+    .map((r) => r.value)
+    .filter((s) => s.items.length > 0);
 }

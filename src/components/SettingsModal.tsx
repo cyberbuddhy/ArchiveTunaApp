@@ -219,7 +219,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Vault and player settings"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
@@ -228,13 +228,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         className="w-full max-w-2xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-850 bg-stone-900/90">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-850 bg-stone-900/90">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
               <Sliders className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-stone-100 flex items-center space-x-2">
+              <h2 className="text-lg font-semibold text-stone-100 flex items-center space-x-2">
                 <span>Vault & Player Settings</span>
               </h2>
               <p className="text-[11px] text-stone-400">
@@ -270,7 +270,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex items-center space-x-1 px-4 pt-3 pb-1 border-b border-stone-850 bg-stone-950/40">
           <button
             onClick={() => setActiveTab("palette")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
               activeTab === "palette"
                 ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs"
                 : "text-stone-400 hover:text-stone-200 hover:bg-stone-850"
@@ -282,7 +282,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             onClick={() => setActiveTab("audio")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
               activeTab === "audio"
                 ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs"
                 : "text-stone-400 hover:text-stone-200 hover:bg-stone-850"
@@ -297,7 +297,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             onClick={() => setActiveTab("vault")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
               activeTab === "vault"
                 ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs"
                 : "text-stone-400 hover:text-stone-200 hover:bg-stone-850"
@@ -380,7 +380,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex items-center space-x-2">
                     <Radio className="w-4 h-4 text-amber-400" />
                     <div>
-                      <h4 className="font-semibold text-stone-200">Archive Stream Fidelity</h4>
+                      <h4 className="text-sm font-semibold text-stone-200">Archive Stream Fidelity</h4>
                       <p className="text-stone-400 text-[11px]">
                         Select preferred audio stream format when loading tapes from Archive.org
                       </p>
@@ -415,7 +415,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex items-center space-x-2">
                     <Moon className="w-4 h-4 text-amber-400" />
                     <div>
-                      <h4 className="font-semibold text-stone-200">Sleep Timer</h4>
+                      <h4 className="text-sm font-semibold text-stone-200">Sleep Timer</h4>
                       <p className="text-stone-400 text-[11px]">
                         Gently stop playback when falling asleep to live concert recordings
                       </p>
@@ -457,7 +457,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="p-3.5 rounded-xl bg-stone-950/40 border border-stone-850 space-y-2">
                   <div className="flex items-center space-x-2">
                     <Gauge className="w-4 h-4 text-amber-400" />
-                    <h4 className="font-semibold text-stone-200">Playback Speed</h4>
+                    <h4 className="text-sm font-semibold text-stone-200">Playback Speed</h4>
                   </div>
                   <p className="text-stone-400 text-[11px]">Default rate for tapes & spoken archive</p>
                   <div className="flex gap-1.5 pt-1">
@@ -481,7 +481,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="p-3.5 rounded-xl bg-stone-950/40 border border-stone-850 space-y-2">
                   <div className="flex items-center space-x-2">
                     <Waves className="w-4 h-4 text-amber-400" />
-                    <h4 className="font-semibold text-stone-200">Track Transition</h4>
+                    <h4 className="text-sm font-semibold text-stone-200">Track Transition</h4>
                   </div>
                   <p className="text-stone-400 text-[11px]">Seamless gapless transition curve</p>
                   <div className="flex gap-1.5 pt-1">
@@ -612,7 +612,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex items-center space-x-2">
                   <Sliders className="w-4 h-4 text-amber-400" />
                   <div>
-                    <h4 className="font-semibold text-stone-200">Graphic Equalizer</h4>
+                    <h4 className="text-sm font-semibold text-stone-200">Graphic Equalizer</h4>
                     <p className="text-stone-400 text-[11px]">
                       10-band studio EQ applied live to playback
                     </p>
@@ -739,19 +739,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className="p-3 rounded-xl bg-stone-950/60 border border-stone-850 text-center">
                   <div className="text-lg font-bold text-amber-400">{albums.length}</div>
-                  <div className="text-[10px] text-stone-400 uppercase tracking-wider">Albums Saved</div>
+                  <div className="text-[11px] text-stone-500 uppercase tracking-[0.12em] font-semibold">Albums Saved</div>
                 </div>
                 <div className="p-3 rounded-xl bg-stone-950/60 border border-stone-850 text-center">
                   <div className="text-lg font-bold text-stone-200">{totalTracks}</div>
-                  <div className="text-[10px] text-stone-400 uppercase tracking-wider">Total Tracks</div>
+                  <div className="text-[11px] text-stone-500 uppercase tracking-[0.12em] font-semibold">Total Tracks</div>
                 </div>
                 <div className="p-3 rounded-xl bg-stone-950/60 border border-stone-850 text-center">
                   <div className="text-lg font-bold text-stone-200">{playlists.length}</div>
-                  <div className="text-[10px] text-stone-400 uppercase tracking-wider">Playlists</div>
+                  <div className="text-[11px] text-stone-500 uppercase tracking-[0.12em] font-semibold">Playlists</div>
                 </div>
                 <div className="p-3 rounded-xl bg-stone-950/60 border border-stone-850 text-center">
                   <div className="text-lg font-bold text-stone-200">{listenHistory.length}</div>
-                  <div className="text-[10px] text-stone-400 uppercase tracking-wider">Plays Logged</div>
+                  <div className="text-[11px] text-stone-500 uppercase tracking-[0.12em] font-semibold">Plays Logged</div>
                 </div>
               </div>
 
@@ -759,7 +759,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="p-4 rounded-xl bg-stone-950/40 border border-stone-850 space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="font-semibold text-stone-200 text-xs">JSON Vault Backup</h4>
+                    <h4 className="text-sm font-semibold text-stone-200">JSON Vault Backup</h4>
                     <p className="text-stone-400 text-[11px]">
                       Safely export your entire library, personal notes, tags, playlists, and tier lists to a portable file.
                     </p>
@@ -842,7 +842,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                     <div>
                       <div className="flex items-center space-x-2">
-                        <h4 className="font-semibold text-stone-200 text-xs">Offline Audio Cache (OPFS / IndexedDB)</h4>
+                        <h4 className="text-sm font-semibold text-stone-200">Offline Audio Cache (OPFS / IndexedDB)</h4>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono">
                           Local-First
                         </span>
@@ -888,7 +888,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <Keyboard className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <h4 className="font-semibold text-stone-200 text-xs">Keyboard Navigation & Keybinds</h4>
+                      <h4 className="text-sm font-semibold text-stone-200">Keyboard Navigation & Keybinds</h4>
                       <p className="text-stone-400 text-[11px]">
                         Full global keyboard controls for playback, search, volume, and tabs
                       </p>

@@ -267,7 +267,7 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
                 <button
                   onClick={handlePlayAll}
                   disabled={!!busy}
-                  className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-stone-950 font-bold text-xs transition-all flex items-center space-x-2 cursor-pointer shadow-md"
+                  className="h-9 px-4 rounded-full bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-stone-950 font-bold text-xs transition-colors flex items-center gap-2 cursor-pointer shadow-md"
                 >
                   <Play className="w-3.5 h-3.5 fill-stone-950" />
                   <span>Play all</span>
@@ -275,7 +275,7 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
                 <button
                   onClick={handleShuffleAll}
                   disabled={!!busy}
-                  className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-200 border border-stone-800 font-semibold text-xs transition-colors flex items-center space-x-2 cursor-pointer"
+                  className="h-9 px-4 rounded-full bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-200 border border-stone-800 font-semibold text-xs transition-colors flex items-center gap-2 cursor-pointer"
                 >
                   <Shuffle className="w-3.5 h-3.5" />
                   <span>Shuffle</span>
@@ -285,7 +285,7 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
             <button
               onClick={handlePickFolder}
               disabled={!!busy}
-              className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-stone-950 font-bold text-xs transition-all flex items-center space-x-2 cursor-pointer shadow-md"
+              className="h-9 px-4 rounded-full bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-stone-950 font-bold text-xs transition-colors flex items-center gap-2 cursor-pointer shadow-md"
             >
               {busy === "pick" || busy === "scan" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderOpen className="w-3.5 h-3.5" />}
               <span>Pick music folder</span>
@@ -295,7 +295,7 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
                 onClick={handleResync}
                 disabled={!!busy}
                 title="Re-read the saved folder (picks up new downloads)"
-                className="px-3 py-2 rounded-xl bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-300 border border-stone-800 transition-colors cursor-pointer"
+                className="w-9 h-9 rounded-full grid place-items-center bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-300 border border-stone-800 transition-colors cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${busy === "scan" ? "animate-spin" : ""}`} />
               </button>
@@ -305,7 +305,7 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
                 onClick={handleForget}
                 disabled={!!busy}
                 title="Remove all local files from the library (disk untouched)"
-                className="px-3 py-2 rounded-xl bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-400 hover:text-red-400 border border-stone-800 transition-colors cursor-pointer"
+                className="w-9 h-9 rounded-full grid place-items-center bg-stone-900 hover:bg-stone-850 disabled:opacity-50 text-stone-400 hover:text-red-400 border border-stone-800 transition-colors cursor-pointer"
               >
                 <FolderX className="w-3.5 h-3.5" />
               </button>
@@ -343,16 +343,16 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
           </p>
         </div>
       ) : displayed.length === 0 ? (
-        <div className="py-12 text-center space-y-2">
-          <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 mx-auto flex items-center justify-center text-sky-400">
-            <FolderOpen className="w-4 h-4" />
+        <div className="py-12 text-center space-y-3 rounded-2xl bg-stone-900/30 border border-stone-800 p-8">
+          <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 mx-auto flex items-center justify-center text-sky-400">
+            <FolderOpen className="w-7 h-7" />
           </div>
           <h3 className="text-sm font-bold text-stone-200">No matches</h3>
-          <p className="text-xs text-stone-400">No local tracks match "{searchQuery}".</p>
+          <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">No local tracks match "{searchQuery}".</p>
         </div>
       ) : (
-        <div className="bg-stone-900/50 border border-stone-800 rounded-2xl overflow-hidden divide-y divide-stone-800/50">
-          <div className="px-3.5 py-2.5 bg-stone-950/60 text-[10px] uppercase font-semibold text-stone-500 flex items-center justify-between">
+        <div className="bg-stone-900/50 border border-stone-800 rounded-2xl overflow-hidden divide-y divide-white/5">
+          <div className="px-3.5 py-2.5 bg-stone-950/60 text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500 flex items-center justify-between">
             <span>Local track & artist</span>
             <span>Format & playback</span>
           </div>
@@ -362,14 +362,17 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
             return (
               <div
                 key={entry.id}
-                className={`group px-3 py-2.5 flex items-center justify-between text-xs transition-colors ${
-                  isCurrent ? "bg-sky-500/10 text-sky-300" : "hover:bg-stone-800/40 text-stone-200"
+                className={`group px-3 py-2 flex items-center gap-3 text-xs border transition-colors ${
+                  isCurrent
+                    ? "bg-sky-500/10 text-sky-300 border-sky-500/20"
+                    : "border-transparent hover:bg-white/5 text-stone-200"
                 }`}
               >
-                <div className="flex items-center space-x-3 min-w-0 flex-1 pr-2">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <button
                     onClick={() => handlePlay(entry)}
-                    className="relative w-8 h-8 rounded-lg overflow-hidden bg-stone-800 border border-stone-700 flex items-center justify-center shrink-0 cursor-pointer group-hover:border-sky-500/50"
+                    aria-label={`Play ${entry.title}`}
+                    className="relative w-8 h-8 rounded-lg overflow-hidden bg-stone-800 border border-stone-800 flex items-center justify-center shrink-0 cursor-pointer group-hover:border-sky-500/50"
                     title="Play local track"
                   >
                     <Music className="w-3.5 h-3.5 text-stone-400" />
@@ -378,37 +381,39 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
                     </div>
                   </button>
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-xs text-stone-100 truncate flex items-center gap-1.5">
+                    <div className="font-medium text-[13px] leading-tight text-stone-100 truncate flex items-center gap-1.5">
                       <span className="truncate">{entry.title}</span>
                       {isCurrent && (
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse shrink-0" />
                       )}
                     </div>
-                    <p className="text-stone-400 text-[11px] truncate mt-0.5">
+                    <p className="text-stone-500 text-[11px] truncate leading-tight mt-0.5">
                       {entry.artist} <span className="text-stone-600">•</span> {entry.album || entry.relativePath}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-3 shrink-0">
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-800 text-sky-300">
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-[10px] tabular-nums px-2 py-0.5 rounded bg-stone-800 text-sky-300">
                     {entry.format}
                   </span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-800 text-stone-300 hidden sm:inline">
+                  <span className="text-[10px] tabular-nums px-2 py-0.5 rounded bg-stone-800 text-stone-300 hidden sm:inline">
                     {sizeMb} MB
                   </span>
-                  <span className="font-mono text-[11px] text-stone-400">
+                  <span className="w-12 text-right text-[11px] tabular-nums text-stone-500">
                     {entry.duration > 0 ? formatTime(entry.duration, "—") : "—"}
                   </span>
                   <button
                     onClick={() => handlePlay(entry)}
-                    className="p-1.5 rounded-lg text-sky-400 hover:bg-sky-500/10 cursor-pointer"
+                    aria-label={`Play ${entry.title}`}
+                    className="p-1.5 rounded-full text-sky-400 hover:bg-white/10 transition-colors cursor-pointer sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
                     title="Play local file"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
                   </button>
                   <button
                     onClick={() => handleRemove(entry.id, entry.title)}
-                    className="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-stone-800 cursor-pointer transition-colors"
+                    aria-label={`Remove ${entry.title} from local library`}
+                    className="p-1.5 rounded-full text-stone-500 hover:text-red-400 hover:bg-white/10 transition-colors cursor-pointer sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
                     title="Remove from local library (disk untouched)"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

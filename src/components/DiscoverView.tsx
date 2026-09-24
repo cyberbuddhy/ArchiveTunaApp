@@ -13,13 +13,14 @@ import {
   SlidersHorizontal,
   RotateCcw,
   Download,
+  History,
   X,
   Search,
 } from "lucide-react";
 import { downloadAlbumZip } from "../utils/download";
 import { GENRE_HIERARCHY, GenreNode } from "../data/genreHierarchy";
 import { Album, SearchCollectionType, SearchEraType } from "../types";
-import { searchArchive, fetchAlbumDetails } from "../services/api";
+import { searchArchive, fetchAlbumDetails, fetchTimeCapsules, TIME_CAPSULES, TimeCapsuleShelf } from "../services/api";
 import { usePlayer } from "../context/PlayerContext";
 
 interface DiscoverViewProps {
@@ -66,6 +67,16 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   const [totalResults, setTotalResults] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  // Time Capsules — fixed era snapshots, fetched once per mount.
+  // Only 3 show at a time; the offset rotates every visit + on shuffle.
+  const [capsules, setCapsules] = useState<TimeCapsuleShelf[]>([]);
+  const [capsulesLoading, setCapsulesLoading] = useState(true);
+  const [capsuleOffset, setCapsuleOffset] = useState(0);
+  const visibleCapsules = useMemo(() => {
+    if (capsules.length <= 3) return capsules;
+    return [0, 1, 2].map((k) => capsules[(capsuleOffset + k) % capsules.length]);
+  }, [capsules, capsuleOffset]);
+
   // Flattened catalogue for searching all genres & subgenres
   interface FlattenedGenreItem {
     node: GenreNode;
@@ -110,27 +121,39 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   const loadRecordings = async (
     queryStr: string,
     title: string,
-    opts?: { collection?: SearchCollectionType; era?: SearchEraType; sort?: string }
+    opts?: { collection?: SearchCollectionType; era?: SearchEraType; sort?: string; page?: number }
   ) => {
     const activeCollection = opts?.collection !== undefined ? opts.collection : collection;
     const activeEra = opts?.era !== undefined ? opts.era : era;
     const activeSort = opts?.sort !== undefined ? opts.sort : sort;
+    const page = opts?.page ?? 1;
 
     setCurrentQuery(queryStr);
-    setCurrentPage(1);
+    setCurrentPage(page);
     setIsLoading(true);
     setSectionTitle(title);
     try {
-      const data = await searchArchive({
-        query: queryStr,
-        collection: activeCollection,
-        era: activeEra,
-        sort: activeSort,
-        rows: 24,
-        page: 1,
-      });
-      setRecordings(data.items || []);
-      setTotalResults(data.total || 0);
+      const fetchPage = (p: number) =>
+        searchArchive({
+          query: queryStr,
+          collection: activeCollection,
+          era: activeEra,
+          sort: activeSort,
+          rows: 24,
+          page: p,
+        });
+      const data = await fetchPage(page);
+      let items = data.items || [];
+      let total = data.total || 0;
+      if (items.length === 0 && page > 1) {
+        // Random deep page overshot the result set — fall back to page 1
+        const retry = await fetchPage(1);
+        items = retry.items || [];
+        total = retry.total || 0;
+        setCurrentPage(1);
+      }
+      setRecordings(items);
+      setTotalResults(total);
     } catch (err) {
       console.error("Failed to load recordings:", err);
       setRecordings([]);
@@ -236,9 +259,24 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
     }
   };
 
-  // Featured classics on mount — the genre list is always visible, never empty
+  // Featured classics on mount — the genre list is always visible, never empty.
+  // Featured jumps to a random page every visit (cheap range: deep Solr pages
+  // stall); capsules load staggered after, so the grid paints first.
   useEffect(() => {
-    loadRecordings("", "Featured Archival Classics");
+    loadRecordings("", "Featured Archival Classics", { page: 1 + Math.floor(Math.random() * 12) });
+    try {
+      const stored = Number(localStorage.getItem("archive_capsule_offset_v1") || "0") || 0;
+      const off = stored % TIME_CAPSULES.length;
+      setCapsuleOffset(off);
+      localStorage.setItem("archive_capsule_offset_v1", String((off + 1) % TIME_CAPSULES.length));
+    } catch { /* private mode — rotation rests on 0 */ }
+    const timer = setTimeout(() => {
+      fetchTimeCapsules(6)
+        .then(setCapsules)
+        .catch(() => setCapsules([]))
+        .finally(() => setCapsulesLoading(false));
+    }, 1200);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -361,12 +399,12 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                   ))}
                 </div>
               ) : (
-                <div className="py-8 text-center space-y-2">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 mx-auto flex items-center justify-center text-amber-400">
-                    <Search className="w-4 h-4" />
+                <div className="py-8 text-center space-y-3">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 mx-auto flex items-center justify-center text-amber-400">
+                    <Search className="w-7 h-7" />
                   </div>
                   <h3 className="text-sm font-bold text-stone-200">No matches</h3>
-                  <p className="text-xs text-stone-400">No genres matching "{genreSearch}"</p>
+                  <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">No genres matching "{genreSearch}"</p>
                 </div>
               )
             ) : (
@@ -431,6 +469,101 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             )}
           </div>
 
+      {/* Time Capsules — 3 cycling eras above the grid, same header language as Featured */}
+      {genrePath.length === 0 && (capsulesLoading || visibleCapsules.length > 0) && (
+        <section aria-label="Time Capsules" className="space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <History className="w-4 h-4 text-amber-400" />
+              <h2 className="text-xs sm:text-sm font-semibold text-stone-200">Time Capsules</h2>
+              <span className="text-[11px] text-stone-500 font-mono">
+                ({visibleCapsules.length} eras · reshuffles on refresh)
+              </span>
+            </div>
+            {!capsulesLoading && capsules.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setCapsuleOffset(Math.floor(Math.random() * capsules.length))}
+                className="p-1.5 text-stone-500 hover:text-amber-400 hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+                title="Shuffle capsules"
+                aria-label="Shuffle time capsules"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {capsulesLoading ? (
+            <div className="grid grid-flow-col auto-cols-[9rem] sm:auto-cols-[10.5rem] gap-3 sm:gap-4 overflow-hidden">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="rounded-2xl border border-stone-800 bg-stone-900/40 p-3 animate-pulse">
+                  <div className="aspect-square rounded-xl bg-stone-800 mb-2.5" />
+                  <div className="h-3 rounded bg-stone-800 w-3/4 mb-1.5" />
+                  <div className="h-2.5 rounded bg-stone-800 w-1/2" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {visibleCapsules.map((cap) => (
+                <div key={cap.label}>
+                  <div className="flex items-baseline gap-2 px-1 mb-2 min-w-0">
+                    <span className="text-xs font-bold text-amber-300 shrink-0">{cap.label}</span>
+                    <span className="text-[11px] text-stone-500 truncate">{cap.blurb}</span>
+                  </div>
+                  <div className="grid grid-flow-col auto-cols-[9rem] sm:auto-cols-[10.5rem] gap-3 sm:gap-4 overflow-x-auto pb-1 scrollbar-none snap-x touch-pan-x">
+                    {cap.items.map((item) => (
+                      <div
+                        key={item.identifier}
+                        id={`capsule-card-${item.identifier}`}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Open ${item.title}`}
+                        onClick={() => handleOpenItemDetail(item.identifier)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleOpenItemDetail(item.identifier);
+                          }
+                        }}
+                        className={`group bg-stone-900/40 hover:bg-stone-850/80 border border-stone-800 hover:border-stone-700 rounded-2xl p-3 transition-all hover:shadow-xl cursor-pointer snap-start ${
+                          openingId === item.identifier ? "opacity-60" : ""
+                        }`}
+                      >
+                        <div className="aspect-square rounded-xl overflow-hidden bg-stone-950 border border-stone-850 relative group-hover:shadow-md mb-2.5">
+                          <img
+                            src={item.coverUrl}
+                            alt={item.title}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "https://archive.org/images/notfound.png";
+                            }}
+                          />
+                        </div>
+                        <h3
+                          className="text-xs font-semibold text-stone-200 group-hover:text-amber-400 transition-colors line-clamp-1"
+                          title={item.title}
+                        >
+                          {item.title}
+                        </h3>
+                        <p
+                          className="text-[11px] text-stone-400 mt-1 truncate"
+                          title={item.artist}
+                        >
+                          {item.artist}
+                          {item.year ? ` • ${item.year}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Recordings — always rendered; featured classics load on mount */}
 
           {/* ========================================================================= */}
@@ -465,13 +598,11 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     setCollection("all");
                     setEra("all");
                     setSort("downloads desc");
-                    if (currentQuery) {
-                      loadRecordings(currentQuery, sectionTitle, {
-                        collection: "all",
-                        era: "all",
-                        sort: "downloads desc",
-                      });
-                    }
+                    loadRecordings(currentQuery, sectionTitle, {
+                      collection: "all",
+                      era: "all",
+                      sort: "downloads desc",
+                    });
                   }}
                   className="p-1.5 text-stone-500 hover:text-stone-300 hover:bg-stone-800 rounded-lg transition-colors flex items-center space-x-1 text-xs cursor-pointer"
                   title="Reset filters"
@@ -496,17 +627,19 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     onChange={(e) => {
                       const next = e.target.value as SearchCollectionType;
                       setCollection(next);
-                      if (currentQuery) {
-                        loadRecordings(currentQuery, sectionTitle, { collection: next });
-                      }
+                      loadRecordings(currentQuery, sectionTitle, { collection: next });
                     }}
                     className="w-full px-2.5 py-1.5 bg-stone-950 border border-stone-800 rounded-xl text-stone-200 text-xs focus:border-amber-500 focus:outline-none"
                   >
                     <option value="all">All Audio Collections</option>
                     <option value="etree">Live Concerts & Tapes (Etree)</option>
-                    <option value="community">Community Audio & Masters</option>
-                    <option value="78rpm">Vintage 78 RPMs & Cylinders</option>
+                    <option value="audio_music">General Audio Music</option>
+                    <option value="opensource_audio">Community Audio & Masters</option>
+                    <option value="georgeblood78s">Vintage 78 RPMs & Cylinders</option>
                     <option value="netlabels">Digital Netlabels & CC</option>
+                    <option value="hiphopmixtapes">Hip-Hop Mixtapes</option>
+                    <option value="flac">Lossless FLAC Format</option>
+                    <option value="vbr_mp3">MP3 Format</option>
                   </select>
                 </div>
 
@@ -521,9 +654,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     onChange={(e) => {
                       const next = e.target.value as SearchEraType;
                       setEra(next);
-                      if (currentQuery) {
-                        loadRecordings(currentQuery, sectionTitle, { era: next });
-                      }
+                      loadRecordings(currentQuery, sectionTitle, { era: next });
                     }}
                     className="w-full px-2.5 py-1.5 bg-stone-950 border border-stone-800 rounded-xl text-stone-200 text-xs focus:border-amber-500 focus:outline-none"
                   >
@@ -534,6 +665,8 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     <option value="1990s">1990s (90s Alt, Grunge, Rock)</option>
                     <option value="1980s">1980s</option>
                     <option value="1970s">1970s</option>
+                    <option value="1960s">1960s</option>
+                    <option value="1950s">1950s</option>
                     <option value="vintage">Historical (1900–1969)</option>
                   </select>
                 </div>
@@ -549,9 +682,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     onChange={(e) => {
                       const next = e.target.value;
                       setSort(next);
-                      if (currentQuery) {
-                        loadRecordings(currentQuery, sectionTitle, { sort: next });
-                      }
+                      loadRecordings(currentQuery, sectionTitle, { sort: next });
                     }}
                     className="w-full px-2.5 py-1.5 bg-stone-950 border border-stone-800 rounded-xl text-stone-200 text-xs focus:border-amber-500 focus:outline-none"
                   >

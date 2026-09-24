@@ -18,6 +18,7 @@ import {
   Loader2,
   Mic,
   ListMusic,
+  Radio,
   MoreVertical,
 } from "lucide-react";
 import { downloadAlbumZip, downloadTrackAudio } from "../utils/download";
@@ -62,7 +63,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
   vaultAction,
   isInVault,
 }) => {
-  const { playTrack, playAlbum, addToQueue, currentTrack, currentTime, isPlaying } = usePlayer();
+  const { playTrack, playAlbum, addToQueue, playRelated, currentTrack, currentTime, isPlaying } = usePlayer();
   const [activeTab, setActiveTab] = useState<"tracks" | "notes">("tracks");
   const [noteText, setNoteText] = useState(album?.userNotes || "");
   const [tagInput, setTagInput] = useState("");
@@ -425,7 +426,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                   {isRateTierListOpen && (
                     <div className="absolute left-0 top-full mt-1.5 w-72 sm:w-80 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-3 z-50 text-xs space-y-3 animate-in fade-in">
                       <div className="flex items-center justify-between pb-1 border-b border-stone-850">
-                        <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">
+                        <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500">
                           Rate & Tier Lists
                         </span>
                         <button
@@ -491,7 +492,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                       {/* Section 2: Custom Tier Lists */}
                       <div className="space-y-1.5 pt-1.5 border-t border-stone-850">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">
+                          <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500">
                             Add to Specific Tier List:
                           </span>
                         </div>
@@ -701,6 +702,20 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                     <>
                       <div className="fixed inset-0 z-30" onClick={() => setAlbumMenuOpen(false)} />
                       <div className="absolute right-0 top-full mt-1 w-52 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 z-40 space-y-0.5">
+                        {album.tracks && album.tracks.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAlbumMenuOpen(false);
+                              playRelated(album.tracks[0], album);
+                              onClose();
+                            }}
+                            className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+                          >
+                            <Radio className="w-3.5 h-3.5 text-stone-500" />
+                            <span>Play Related</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -765,7 +780,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                   {isAddAllPlaylistOpen && (
                     <div className="absolute left-0 top-full mt-1.5 w-60 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-2 z-50 text-xs space-y-1.5 animate-in fade-in">
                       <div className="flex items-center justify-between pb-1 border-b border-stone-850">
-                        <span className="text-[10px] uppercase font-bold text-stone-400">
+                        <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500">
                           Add All Songs To:
                         </span>
                         <button
@@ -888,23 +903,23 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
             </div>
 
           {/* Navigation Tabs */}
-          <div className="flex space-x-4 border-t border-stone-800/80 mt-4 pt-3 text-xs font-medium">
+          <div className="flex gap-2 border-t border-stone-800/80 mt-4 pt-3 text-xs font-medium">
             <button
               onClick={() => setActiveTab("tracks")}
-              className={`pb-1 transition-colors border-b-2 ${
+              className={`px-3 py-1.5 rounded-xl border transition-colors cursor-pointer ${
                 activeTab === "tracks"
-                  ? "border-amber-500 text-amber-400"
-                  : "border-transparent text-stone-400 hover:text-stone-200"
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                  : "text-stone-400 border-transparent hover:text-stone-200 hover:bg-stone-800/60"
               }`}
             >
               Tracks ({album.tracks?.length || 0})
             </button>
             <button
               onClick={() => setActiveTab("notes")}
-              className={`pb-1 transition-colors border-b-2 ${
+              className={`px-3 py-1.5 rounded-xl border transition-colors cursor-pointer ${
                 activeTab === "notes"
-                  ? "border-amber-500 text-amber-400"
-                  : "border-transparent text-stone-400 hover:text-stone-200"
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                  : "text-stone-400 border-transparent hover:text-stone-200 hover:bg-stone-800/60"
               }`}
             >
               Notes & Custom Tags {album.userNotes ? "•" : ""}
@@ -917,8 +932,14 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
           {activeTab === "tracks" && (
             <div className="divide-y divide-white/5">
               {(!album.tracks || album.tracks.length === 0) ? (
-                <div className="py-12 text-center text-xs text-stone-500">
-                  No streaming audio tracks detected for this recording.
+                <div className="py-12 text-center space-y-3">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 mx-auto flex items-center justify-center text-amber-400">
+                    <Disc3 className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-sm font-bold text-stone-200">No playable tracks</h3>
+                  <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">
+                    No streaming audio tracks detected for this recording.
+                  </p>
                 </div>
               ) : (
                 album.tracks.map((track, idx) => {
@@ -976,7 +997,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                           {trackMenuId === track.id && (
                             <>
                               <div className="fixed inset-0 z-30" onClick={() => setTrackMenuId(null)} />
-                              <div className="absolute right-0 top-full mt-1 w-52 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 z-40 space-y-0.5">
+                      <div className="absolute right-0 top-full mt-1 w-52 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 z-40 space-y-0.5">
                                 <button
                                   type="button"
                                   onClick={() => { handleToggleTrackPin(track); setTrackMenuId(null); }}
@@ -1013,6 +1034,14 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                                 >
                                   <ListMusic className="w-3.5 h-3.5 text-stone-500" />
                                   <span>Add to Playback Queue</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { playRelated(track, album); onClose(); setTrackMenuId(null); }}
+                                  className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+                                >
+                                  <Radio className="w-3.5 h-3.5 text-stone-500" />
+                                  <span>Play Related</span>
                                 </button>
                                 <button
                                   type="button"
@@ -1064,7 +1093,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                                 style={{ top: menuPos.top, left: menuPos.left }}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <p className="text-[10px] text-stone-400 px-2 py-0.5 font-medium uppercase">
+                                <p className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500 px-2 py-0.5">
                                   Add to Playlist
                                 </p>
                                 <div className="max-h-44 overflow-y-auto space-y-1">
@@ -1246,7 +1275,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
               {/* Archival Description */}
               {album.description && (
                 <div className="space-y-1 pt-2 border-t border-stone-800">
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                  <h4 className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500">
                     Archival Description
                   </h4>
                   <p className="text-xs text-stone-400 leading-relaxed max-h-36 overflow-y-auto pr-1">

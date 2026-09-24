@@ -59,7 +59,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
   const isAlreadyInLibrary = previewAlbum ? existingAlbumIds.has(previewAlbum.id) : false;
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Capture music album" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+    <div role="dialog" aria-modal="true" aria-label="Capture music album" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
       <div
         id="capture-modal-container"
         className="w-full max-w-xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
@@ -87,7 +87,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-5">
           <p className="text-sm text-stone-400 leading-relaxed">
             Enter any <strong className="text-stone-300">Archive.org details link</strong> (e.g.{" "}
-            <code className="px-1.5 py-0.5 rounded bg-stone-800 text-amber-300 text-xs">
+              <code className="px-1.5 py-0.5 rounded bg-stone-800 text-amber-300 text-xs font-mono">
               archive.org/details/gd77-05-08...
             </code>
             ), an item identifier, or a direct streaming link. The album and its full tracklist will be captured into your private collection.
@@ -160,7 +160,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                   className="w-20 h-20 rounded-lg object-cover bg-stone-800 border border-stone-800 shrink-0"
                 />
                 <div className="min-w-0 flex-1">
-                  <span className="inline-block px-2 py-0.5 rounded-full text-[10px] uppercase font-semibold tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-1">
+                  <span className="inline-block px-2 py-0.5 rounded-full text-[11px] uppercase tracking-[0.12em] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-1">
                     {previewAlbum.collection || "Archive.org"}
                   </span>
                   <h3 className="text-sm font-semibold text-stone-100 truncate">{previewAlbum.title}</h3>
@@ -175,7 +175,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
               {/* Tracks preview list */}
               {previewAlbum.tracks.length > 0 && (
                 <div className="border-t border-stone-800/80 pt-3">
-                  <p className="text-[11px] uppercase tracking-wider text-stone-500 font-medium mb-2">
+                  <p className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500 mb-2">
                     Detected Audio Tracks ({previewAlbum.tracks.length})
                   </p>
                   <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">

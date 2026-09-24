@@ -1043,7 +1043,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
               onClick={() => onOpenArtistDiscography(matchedArtists[0].name)}
               className="group bg-stone-900/80 hover:bg-stone-850 border border-stone-800 hover:border-amber-500/50 rounded-2xl p-3.5 sm:p-4 shadow-md transition-all duration-200 cursor-pointer flex items-center gap-4"
             >
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-stone-800 shrink-0 border-2 border-stone-700/80 group-hover:border-amber-400 transition-colors flex items-center justify-center">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-stone-800 shrink-0 border-2 border-stone-800 group-hover:border-amber-400 transition-colors flex items-center justify-center">
                 {matchedArtists[0].coverUrl ? (
                   <img
                     src={matchedArtists[0].coverUrl}
@@ -1202,10 +1202,10 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   <div
                     key={item.identifier}
                     onClick={() => handleOpenItemDetail(item.identifier)}
-                    className="group bg-stone-900/70 hover:bg-stone-850 border border-stone-800/80 hover:border-amber-500/40 rounded-xl p-2.5 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
+                    className="group bg-stone-900/50 hover:bg-stone-900 border border-stone-800 hover:border-stone-700 rounded-2xl p-3 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
                   >
                     {/* Album / Item Cover Art */}
-                    <div className="relative aspect-square rounded-lg overflow-hidden bg-stone-950 mb-2 shadow-inner">
+                    <div className="relative aspect-square rounded-xl overflow-hidden bg-stone-950 border border-stone-800 mb-2.5 shadow-inner">
                       <img
                         src={
                           item.coverUrl ||

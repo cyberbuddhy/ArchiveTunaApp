@@ -183,7 +183,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Artist discography"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
     >
       <div
@@ -192,7 +192,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* TOP HEADER */}
-        <div className="shrink-0 px-6 py-5 border-b border-stone-800 flex items-start justify-between bg-stone-950/80">
+        <div className="shrink-0 px-6 py-4 border-b border-stone-800 flex items-start justify-between bg-stone-950/80">
           <div className="space-y-2 pr-4 flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               {data?.artist?.country && (
@@ -264,7 +264,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
             <button
               id="close-discography-modal-btn"
               onClick={onClose}
-              className="p-2 text-stone-400 hover:text-white bg-stone-800/60 hover:bg-stone-800 rounded-xl transition-colors border border-stone-700/40 shrink-0 cursor-pointer"
+              className="p-1.5 rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors shrink-0 cursor-pointer"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />
@@ -401,12 +401,12 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
               {/* Archive.org Stream Options Results */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between border-b border-stone-800 pb-2">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-200 flex items-center gap-2">
+                  <h3 className="text-xs sm:text-sm font-semibold text-stone-200 flex items-center gap-2">
                     <Radio className="w-4 h-4 text-amber-400" />
                     Archive.org Stream Versions
                   </h3>
                   {releaseStreams.length > 0 && (
-                    <span className="text-xs text-amber-400 font-mono">
+                    <span className="text-[11px] text-stone-500 font-mono">
                       {releaseStreams.length} stream{releaseStreams.length === 1 ? "" : "s"} found
                     </span>
                   )}
@@ -431,7 +431,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                           className="group bg-stone-950/60 hover:bg-stone-800/80 border border-stone-800 hover:border-amber-500/40 rounded-xl p-3.5 flex items-start space-x-3.5 transition-all shadow-sm"
                         >
                           <div
-                            className="w-14 h-14 rounded-lg overflow-hidden bg-stone-800 shrink-0 relative cursor-pointer group-hover:ring-1 group-hover:ring-amber-400/40"
+                            className="w-14 h-14 rounded-lg overflow-hidden bg-stone-800 border border-stone-800 shrink-0 relative cursor-pointer group-hover:border-amber-400/40 transition-colors"
                             onClick={() => {
                               onSelectAlbum(stream.identifier);
                               onClose();
@@ -449,7 +449,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                                   "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop&q=80";
                               }}
                             />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="absolute inset-0 bg-stone-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                               <Play className="w-5 h-5 text-amber-400 fill-amber-400" />
                             </div>
                           </div>
@@ -460,7 +460,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                                 onSelectAlbum(stream.identifier);
                                 onClose();
                               }}
-                              className="text-xs sm:text-sm font-semibold text-stone-200 group-hover:text-amber-300 line-clamp-1 cursor-pointer transition-colors"
+                              className="text-xs font-semibold text-stone-100 group-hover:text-amber-400 line-clamp-1 cursor-pointer transition-colors"
                               title={stream.title}
                             >
                               {stream.title}
@@ -522,7 +522,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                               <button
                                 type="button"
                                 onClick={(e) => downloadAlbumZip(stream.identifier, stream.title, e)}
-                              className="p-1.5 rounded-lg text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition-colors ml-auto cursor-pointer"
+                              className="p-1.5 rounded-full text-stone-500 hover:text-amber-400 hover:bg-white/10 transition-colors ml-auto cursor-pointer"
                                 title="Download recording (ZIP)"
                               >
                                 <Download className="w-3.5 h-3.5" />
@@ -532,7 +532,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                                 href={`https://archive.org/details/${stream.identifier}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="p-1.5 rounded-lg text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition-colors ml-auto"
+                                className="p-1.5 rounded-full text-stone-500 hover:text-stone-300 hover:bg-white/10 transition-colors ml-auto"
                                 title="Open on Archive.org"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
@@ -568,7 +568,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                           setSelectedRelease(null);
                           setActiveTab("live");
                         }}
-                        className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+                        className="h-9 px-4 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-full transition-colors shadow flex items-center gap-1.5 cursor-pointer"
                       >
                         <Radio className="w-3.5 h-3.5" />
                         <span>Explore Live Concert Tapes & Bootlegs</span>
@@ -576,7 +576,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
 
                       <button
                         onClick={() => handleSearchAlbumOnArchive(selectedRelease)}
-                        className="px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+                        className="h-9 px-3.5 bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
                       >
                         <Search className="w-3.5 h-3.5" />
                         <span>Search All Archive Audio</span>
@@ -591,7 +591,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-stone-800 pb-2">
                 <div>
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-200 flex items-center gap-2">
+                  <h3 className="text-xs sm:text-sm font-semibold text-stone-200 flex items-center gap-2">
                     <Radio className="w-4 h-4 text-amber-400" />
                     Live Concert Tapes & Audio Bootlegs ({data?.totalLiveTapes || data?.liveTapes.length || 0})
                   </h3>
@@ -614,7 +614,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                       >
                         {/* Artwork / Icon */}
                         <div
-                          className="w-16 h-16 rounded-xl overflow-hidden bg-stone-800 shrink-0 relative cursor-pointer group-hover:ring-1 group-hover:ring-amber-400/40"
+                          className="w-16 h-16 rounded-xl overflow-hidden bg-stone-800 border border-stone-800 shrink-0 relative cursor-pointer group-hover:border-amber-400/40 transition-colors"
                           onClick={() => {
                             onSelectAlbum(tape.identifier);
                             onClose();
@@ -642,7 +642,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                                 onSelectAlbum(tape.identifier);
                                 onClose();
                               }}
-                              className="text-xs sm:text-sm font-semibold text-stone-200 group-hover:text-amber-300 line-clamp-1 cursor-pointer transition-colors"
+                              className="text-xs font-semibold text-stone-100 group-hover:text-amber-400 line-clamp-1 cursor-pointer transition-colors"
                               title={tape.title}
                             >
                               {tape.title}
@@ -710,7 +710,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                             <button
                               type="button"
                               onClick={(e) => downloadAlbumZip(tape.identifier, tape.title, e)}
-                              className="p-1.5 rounded-lg text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition-colors ml-auto cursor-pointer"
+                              className="p-1.5 rounded-full text-stone-500 hover:text-amber-400 hover:bg-white/10 transition-colors ml-auto cursor-pointer"
                               title="Download concert (ZIP)"
                             >
                               <Download className="w-3.5 h-3.5" />
@@ -720,7 +720,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                               href={`https://archive.org/details/${tape.identifier}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="p-1.5 rounded-lg text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition-colors ml-auto"
+                              className="p-1.5 rounded-full text-stone-500 hover:text-stone-300 hover:bg-white/10 transition-colors ml-auto"
                               title="Open on Archive.org"
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
@@ -732,8 +732,14 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                   })}
                 </div>
               ) : (
-                <div className="py-12 text-center text-stone-500 text-xs">
-                  No live tapes cataloged on Archive.org for {data?.artist?.name || artistName}.
+                <div className="py-12 text-center space-y-3 rounded-2xl bg-stone-900/30 border border-stone-800 p-8">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 mx-auto flex items-center justify-center text-amber-400">
+                    <Disc3 className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-sm font-bold text-stone-200">No live tapes yet</h3>
+                  <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">
+                    No live tapes cataloged on Archive.org for {data?.artist?.name || artistName}.
+                  </p>
                 </div>
               )}
             </div>
@@ -741,7 +747,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
             /* =================== SECTION: OFFICIAL RELEASES GRID (ALBUMS, EPS, SINGLES) =================== */
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-stone-800 pb-2">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-300 flex items-center gap-2">
+                <h3 className="text-xs sm:text-sm font-semibold text-stone-200 flex items-center gap-2">
                   <Disc3 className="w-4 h-4 text-amber-400" />
                   {activeTab === "albums" && `Studio Albums (${currentTabReleases.length})`}
                   {activeTab === "eps" && `EPs & Extended Plays (${currentTabReleases.length})`}
@@ -756,11 +762,11 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                     <div
                       key={release.id}
                       onClick={() => handleOpenReleaseStreams(release)}
-                      className="group bg-stone-950/60 hover:bg-stone-850 border border-stone-800/80 hover:border-amber-500/50 rounded-xl p-3 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-lg cursor-pointer"
+                      className="group bg-stone-900/50 hover:bg-stone-900 border border-stone-800 hover:border-stone-700 rounded-2xl p-3 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-lg cursor-pointer"
                     >
                       <div>
                         {/* Cover image */}
-                        <div className="relative aspect-square rounded-lg overflow-hidden bg-stone-850 mb-2.5 shadow-inner flex items-center justify-center">
+                        <div className="relative aspect-square rounded-xl overflow-hidden bg-stone-950 border border-stone-800 mb-2.5 shadow-inner flex items-center justify-center">
                           {release.coverUrl ? (
                             <img
                             src={release.coverUrl}
@@ -788,7 +794,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                         {/* Title & Metadata */}
                         <div className="space-y-0.5">
                           <h4
-                            className="text-xs sm:text-sm font-semibold text-stone-200 group-hover:text-amber-300 line-clamp-1 transition-colors"
+                            className="text-xs font-semibold text-stone-100 group-hover:text-amber-400 line-clamp-1 transition-colors"
                             title={release.title}
                           >
                             {release.title}
@@ -804,12 +810,13 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                   ))}
                 </div>
               ) : (
-                <div className="py-14 text-center rounded-xl bg-stone-950/30 border border-stone-800/80 p-8 space-y-2">
-                  <Disc3 className="w-8 h-8 text-stone-600 mx-auto" />
-                  <p className="text-xs text-stone-400">
+                <div className="py-14 text-center rounded-2xl bg-stone-900/30 border border-stone-800 p-8 space-y-3">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 mx-auto flex items-center justify-center text-amber-400">
+                    <Disc3 className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-sm font-bold text-stone-200">Nothing here yet</h3>
+                  <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">
                     No {activeTab} found in the MusicBrainz catalog for {data?.artist?.name || artistName}.
-                  </p>
-                  <p className="text-[11px] text-stone-500">
                     Try switching to the Live Tapes tab to explore concert recordings.
                   </p>
                 </div>

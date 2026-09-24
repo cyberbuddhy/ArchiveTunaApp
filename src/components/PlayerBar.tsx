@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Play,
   Pause,
@@ -16,6 +16,9 @@ import {
   Plus,
   Check,
   MoreVertical,
+  Radio,
+  Mic,
+  Share2,
   Download,
   Shuffle,
   Repeat,
@@ -31,6 +34,9 @@ import { usePlayer } from "../context/PlayerContext";
 import { Album, Track } from "../types";
 import { fetchAlbumDetails } from "../services/api";
 import { downloadAlbumZip, downloadTrackAudio } from "../utils/download";
+import { offlineCache } from "../services/offlineCache";
+import { linkForSong } from "../services/share";
+import { currentLyricIndex, fetchLyrics, LyricsResult } from "../services/lyrics";
 import { Waveform } from "./Waveform";
 import { formatTime } from "../utils/format";
 import { getStoredPlayerSettings, savePlayerSettings } from "../services/playerSettings";
@@ -77,6 +83,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
     removeFromQueue,
     clearQueue,
     playTrack,
+    playRelated,
     isCurrentTrackOffline,
     isOfflineDownloading,
     togglePinCurrentTrack,
@@ -102,9 +109,115 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
       key,
       index,
       track,
-      top: Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 170)),
+      top: Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 280)),
       left: Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)),
     });
+  };
+
+  // Inline synced lyrics (lrclib) — same behavior as the album view
+  const [lyricsOpenId, setLyricsOpenId] = useState<string | null>(null);
+  const [lyricsMap, setLyricsMap] = useState<Record<string, LyricsResult | null>>({});
+  const [lyricsLoadingId, setLyricsLoadingId] = useState<string | null>(null);
+  const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
+  const handleToggleLyrics = async (track: Track) => {
+    if (lyricsOpenId === track.id) {
+      setLyricsOpenId(null);
+      return;
+    }
+    setLyricsOpenId(track.id);
+    if (lyricsMap[track.id] !== undefined) return;
+    setLyricsLoadingId(track.id);
+    try {
+      const res = await fetchLyrics(track.artist || "", track.title, track.album, track.duration);
+      setLyricsMap((m) => ({ ...m, [track.id]: res }));
+    } catch {
+      setLyricsMap((m) => ({ ...m, [track.id]: null }));
+    } finally {
+      setLyricsLoadingId(null);
+    }
+  };
+  // Follow the active lyric line inside its own scroll box only
+  useEffect(() => {
+    if (lyricsOpenId == null) return;
+    const box = lyricsScrollRef.current;
+    const el = box?.querySelector('[data-lr-active="1"]') as HTMLElement | null;
+    if (!box || !el) return;
+    const elTop = el.offsetTop - box.offsetTop;
+    if (elTop < box.scrollTop) box.scrollTop = elTop - 8;
+    else if (elTop + el.offsetHeight > box.scrollTop + box.clientHeight) {
+      box.scrollTop = elTop + el.offsetHeight - box.clientHeight + 8;
+    }
+  }, [lyricsOpenId, currentTime, currentTrack?.id]);
+
+  const renderLyricsPanel = (track: Track) => {
+    if (lyricsOpenId !== track.id) return null;
+    const isCurrent = currentTrack?.id === track.id;
+    return (
+      <div
+        ref={lyricsScrollRef}
+        className="ml-10 mb-2 rounded-xl bg-stone-950/60 border border-stone-800/60 p-3 max-h-56 overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {(() => {
+          if (lyricsLoadingId === track.id) {
+            return (
+              <div className="flex items-center gap-2 text-[11px] text-stone-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                <span>Looking for lyrics…</span>
+              </div>
+            );
+          }
+          const res = lyricsMap[track.id];
+          if (!res) {
+            return <p className="text-[11px] text-stone-500">No lyrics found for this one.</p>;
+          }
+          if (res.instrumental) {
+            return <p className="text-[11px] text-stone-500">Instrumental — no lyrics.</p>;
+          }
+          if (res.synced && res.synced.length > 0) {
+            const active = isCurrent ? currentLyricIndex(res.synced, currentTime) : -1;
+            return (
+              <div className="space-y-1">
+                {res.synced.map((l, i) => (
+                  <p
+                    key={i}
+                    data-lr-active={i === active ? "1" : undefined}
+                    className={`text-xs leading-relaxed transition-colors ${
+                      i === active ? "text-amber-300 font-semibold" : "text-stone-400"
+                    }`}
+                  >
+                    {l.line}
+                  </p>
+                ))}
+              </div>
+            );
+          }
+          return <p className="text-xs text-stone-300 whitespace-pre-line leading-relaxed">{res.plain}</p>;
+        })()}
+      </div>
+    );
+  };
+
+  const handleTogglePin = async (track: Track) => {
+    if (offlineCache.isTrackCachedSync(track.id)) {
+      await offlineCache.removeCachedTrack(track.id);
+    } else {
+      await offlineCache.cacheTrack(track);
+    }
+    setQueueMenu(null);
+  };
+
+  const handleCopySongLink = async (track: Track, queueIndexFallback: number) => {
+    if (!track.albumId) {
+      setQueueMenu(null);
+      return;
+    }
+    try {
+      await navigator.clipboard?.writeText(
+        linkForSong(track.albumId, track.trackNumber || queueIndexFallback + 1)
+      );
+    } catch { /* clipboard unavailable */ }
+    setQueueMenu(null);
   };
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverPosition, setHoverPosition] = useState<number>(0);
@@ -372,8 +485,8 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             </button>
 
             <div className="text-center min-w-0 px-2 flex-1">
-              <span className="text-[10px] uppercase font-bold tracking-widest text-stone-400 block">
-                PLAYING FROM VAULT
+              <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500 block">
+                Playing from vault
               </span>
               <span className="text-xs font-semibold text-stone-200 truncate block">
                 {currentAlbum?.title || currentTrack.album || "Archive.org Audio"}
@@ -770,8 +883,8 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           {/* Now Playing Banner */}
           <div className="px-4 py-2.5 bg-amber-500/10 border-b border-stone-850 flex items-center justify-between gap-2">
             <div className="flex items-center space-x-2.5 min-w-0">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-amber-400 shrink-0">
-                Now Playing
+              <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-amber-400 shrink-0">
+                Now playing
               </span>
               <span className="text-xs font-semibold text-stone-200 truncate">
                 {currentTrack.title}
@@ -785,10 +898,12 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           {/* Scrollable Queue Track List */}
           <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-2 divide-y divide-white/5">
             {queue.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-8 text-stone-500">
-                <ListMusic className="w-12 h-12 text-stone-700 mb-2" />
-                <p className="text-sm font-semibold text-stone-300">Your queue is empty</p>
-                <p className="text-xs text-stone-500 mt-1 max-w-xs">
+              <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 mx-auto flex items-center justify-center text-amber-400">
+                  <ListMusic className="w-7 h-7" />
+                </div>
+                <p className="text-sm font-bold text-stone-200">Your queue is empty</p>
+                <p className="text-xs text-stone-500 mt-1 max-w-xs mx-auto leading-relaxed">
                   Tap any track in your Vault, Search, or Discover to queue songs up for continuous listening.
                 </p>
               </div>
@@ -797,8 +912,8 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 if (!track) return null;
                 const isCurrent = i === queueIndex;
                 return (
+                  <React.Fragment key={`mobile_q_${track.id || i}_${i}`}>
                   <div
-                    key={`mobile_q_${track.id || i}_${i}`}
                     onClick={() => playTrack(track, currentAlbum || undefined)}
                     className={`group flex items-center gap-3 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
                       isCurrent
@@ -839,6 +954,8 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                       </button>
                     </div>
                   </div>
+                  {renderLyricsPanel(track)}
+                  </React.Fragment>
                 );
               })
             )}
@@ -852,7 +969,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             <button
               type="button"
               onClick={() => setShowQueue(false)}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-xl shadow transition-colors cursor-pointer"
+              className="h-9 px-4 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded-full shadow transition-colors cursor-pointer"
             >
               Done
             </button>
@@ -879,8 +996,8 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                   <ListMusic className="w-3.5 h-3.5 text-amber-400" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-200">
-                    Up Next in Queue
+                  <h3 className="text-xs sm:text-sm font-semibold text-stone-200">
+                    Up next in queue
                   </h3>
                   <p className="text-[11px] text-stone-400">
                     {queue.length} {queue.length === 1 ? "track" : "tracks"}
@@ -904,12 +1021,12 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 if (!track) return null;
                 const isCurrent = i === queueIndex;
                 return (
+                  <React.Fragment key={`desk_q_${track.id || i}_${i}`}>
                   <div
-                    key={`desk_q_${track.id || i}_${i}`}
                     onClick={() => playTrack(track)}
                     className={`group flex items-center gap-3 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
                       isCurrent
-                        ? "bg-amber-500/10 border-amber-500/20 text-amber-300 font-medium"
+                        ? "bg-amber-500/10 border-amber-500/20 text-amber-300 font-semibold"
                         : "text-stone-300 border-transparent hover:bg-white/5"
                     }`}
                   >
@@ -946,6 +1063,8 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                       </button>
                     </div>
                   </div>
+                  {renderLyricsPanel(track)}
+                  </React.Fragment>
                 );
               })}
             </div>
@@ -1065,12 +1184,12 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 type="button"
                 onClick={togglePinCurrentTrack}
                 disabled={isOfflineDownloading}
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                className={`p-1.5 rounded-full transition-colors cursor-pointer ${
                   isCurrentTrackOffline
                     ? "text-emerald-400 hover:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30"
                     : isOfflineDownloading
                     ? "text-amber-400 bg-amber-500/10 animate-pulse"
-                    : "text-stone-400 hover:text-emerald-400 hover:bg-stone-900"
+                    : "text-stone-400 hover:text-emerald-400 hover:bg-white/10"
                 }`}
                 title={
                   isCurrentTrackOffline
@@ -1091,10 +1210,10 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 id="player-save-btn"
                 type="button"
                 onClick={handleSaveClick}
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                className={`p-1.5 rounded-full transition-colors cursor-pointer ${
                   isSaved
                     ? "text-emerald-400 hover:text-emerald-300 bg-emerald-500/10"
-                    : "text-stone-400 hover:text-emerald-400 hover:bg-stone-900"
+                    : "text-stone-400 hover:text-emerald-400 hover:bg-white/10"
                 }`}
                 title={isSaved ? "In your Vault" : "Save album to Vault"}
               >
@@ -1106,7 +1225,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                   id="player-download-album-btn"
                   type="button"
                   onClick={handleDownloadAlbum}
-                  className="p-1.5 rounded-lg text-stone-400 hover:text-[var(--color-secondary-main)] hover:bg-stone-900 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-full text-stone-400 hover:text-[var(--color-secondary-main)] hover:bg-white/10 transition-colors cursor-pointer"
                   title="Download album (ZIP)"
                 >
                   <Download className="w-4 h-4" />
@@ -1319,6 +1438,14 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             className="fixed z-50 w-52 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 space-y-0.5"
             style={{ top: queueMenu.top, left: queueMenu.left }}
           >
+            <button
+              type="button"
+              onClick={() => handleTogglePin(queueMenu.track)}
+              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+            >
+              <Database className={`w-3.5 h-3.5 ${offlineCache.isTrackCachedSync(queueMenu.track.id) ? "text-emerald-400" : "text-stone-500"}`} />
+              <span>{offlineCache.isTrackCachedSync(queueMenu.track.id) ? "Remove offline pin" : "Pin offline"}</span>
+            </button>
             {queueMenu.track.streamUrl && (
               <button
                 type="button"
@@ -1336,6 +1463,36 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 <span>Download</span>
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                playRelated(queueMenu.track);
+                setQueueMenu(null);
+              }}
+              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+            >
+              <Radio className="w-3.5 h-3.5 text-stone-500" />
+              <span>Play Related</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCopySongLink(queueMenu.track, queueMenu.index)}
+              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5 text-stone-500" />
+              <span>Copy link</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                handleToggleLyrics(queueMenu.track);
+                setQueueMenu(null);
+              }}
+              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+            >
+              <Mic className={`w-3.5 h-3.5 ${lyricsOpenId === queueMenu.track.id ? "text-amber-400" : "text-stone-500"}`} />
+              <span>Lyrics</span>
+            </button>
             <button
               type="button"
               onClick={() => {

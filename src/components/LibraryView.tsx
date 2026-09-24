@@ -23,13 +23,17 @@ import {
   Share2,
   History,
   MoreVertical,
+  Radio,
+  Mic,
+  Loader2,
 } from "lucide-react";
 import { Album, Track, Playlist, TierList, ListenHistoryItem } from "../types";
 import { getStoredHistory } from "../services/storage";
 import { fetchAlbumDetails } from "../services/api";
 import { buildSmartMixes, loadHistoryPlayback, SmartMix } from "../services/insights";
 import { usePlayer } from "../context/PlayerContext";
-import { linkForPlaylist } from "../services/share";
+import { linkForPlaylist, linkForSong } from "../services/share";
+import { currentLyricIndex, fetchLyrics, LyricsResult } from "../services/lyrics";
 import { downloadAlbumZip, downloadTrackAudio } from "../utils/download";
 import { TierListView } from "./TierListView";
 import { LocalLibraryTab } from "./LocalLibraryTab";
@@ -85,7 +89,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onShowToast,
   onOpenArtistDiscography,
 }) => {
-  const { playTrack, playRandomTracks, addToQueue, currentTrack, isPlaying } = usePlayer();
+  const { playTrack, playRandomTracks, addToQueue, playRelated, currentTrack, currentTime, isPlaying } = usePlayer();
 
   // Tab switched here: focus vault search so it's ready to type (desktop pointers only)
   useEffect(() => {
@@ -117,6 +121,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [songMenu, setSongMenu] = useState<{
     key: string;
     track: Track;
+    album?: Album;
     context: "playlist" | "songs";
     playlistIndex: number;
     top: number;
@@ -127,7 +132,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     key: string,
     track: Track,
     context: "playlist" | "songs",
-    playlistIndex: number = -1
+    playlistIndex: number = -1,
+    album?: Album
   ) => {
     e.stopPropagation();
     const r = e.currentTarget.getBoundingClientRect();
@@ -135,11 +141,122 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     setSongMenu({
       key,
       track,
+      album,
       context,
       playlistIndex,
-      top: Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 260)),
+      top: Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 330)),
       left: Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)),
     });
+  };
+
+  // Inline synced lyrics (lrclib) — same behavior as the album view
+  const [lyricsOpenId, setLyricsOpenId] = useState<string | null>(null);
+  const [lyricsMap, setLyricsMap] = useState<Record<string, LyricsResult | null>>({});
+  const [lyricsLoadingId, setLyricsLoadingId] = useState<string | null>(null);
+  const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
+  const handleToggleLyrics = async (track: Track, albumTitle?: string) => {
+    if (lyricsOpenId === track.id) {
+      setLyricsOpenId(null);
+      return;
+    }
+    setLyricsOpenId(track.id);
+    if (lyricsMap[track.id] !== undefined) return;
+    setLyricsLoadingId(track.id);
+    try {
+      const res = await fetchLyrics(track.artist || "", track.title, albumTitle, track.duration);
+      setLyricsMap((m) => ({ ...m, [track.id]: res }));
+    } catch {
+      setLyricsMap((m) => ({ ...m, [track.id]: null }));
+    } finally {
+      setLyricsLoadingId(null);
+    }
+  };
+  // Follow the active lyric line inside its own scroll box only
+  useEffect(() => {
+    if (lyricsOpenId == null) return;
+    const box = lyricsScrollRef.current;
+    const el = box?.querySelector('[data-lr-active="1"]') as HTMLElement | null;
+    if (!box || !el) return;
+    const elTop = el.offsetTop - box.offsetTop;
+    if (elTop < box.scrollTop) box.scrollTop = elTop - 8;
+    else if (elTop + el.offsetHeight > box.scrollTop + box.clientHeight) {
+      box.scrollTop = elTop + el.offsetHeight - box.clientHeight + 8;
+    }
+  }, [lyricsOpenId, currentTime, currentTrack?.id]);
+
+  const renderLyricsPanel = (track: Track) => {
+    if (lyricsOpenId !== track.id) return null;
+    const isCurrent = currentTrack?.id === track.id;
+    return (
+      <div
+        ref={lyricsScrollRef}
+        className="ml-10 mb-2 rounded-xl bg-stone-950/60 border border-stone-800/60 p-3 max-h-56 overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {(() => {
+          if (lyricsLoadingId === track.id) {
+            return (
+              <div className="flex items-center gap-2 text-[11px] text-stone-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                <span>Looking for lyrics…</span>
+              </div>
+            );
+          }
+          const res = lyricsMap[track.id];
+          if (!res) {
+            return <p className="text-[11px] text-stone-500">No lyrics found for this one.</p>;
+          }
+          if (res.instrumental) {
+            return <p className="text-[11px] text-stone-500">Instrumental — no lyrics.</p>;
+          }
+          if (res.synced && res.synced.length > 0) {
+            const active = isCurrent ? currentLyricIndex(res.synced, currentTime) : -1;
+            return (
+              <div className="space-y-1">
+                {res.synced.map((l, i) => (
+                  <p
+                    key={i}
+                    data-lr-active={i === active ? "1" : undefined}
+                    className={`text-xs leading-relaxed transition-colors ${
+                      i === active ? "text-amber-300 font-semibold" : "text-stone-400"
+                    }`}
+                  >
+                    {l.line}
+                  </p>
+                ))}
+              </div>
+            );
+          }
+          return <p className="text-xs text-stone-300 whitespace-pre-line leading-relaxed">{res.plain}</p>;
+        })()}
+      </div>
+    );
+  };
+
+  const handleTogglePin = async (track: Track, album?: Album) => {
+    if (offlineCache.isTrackCachedSync(track.id)) {
+      await offlineCache.removeCachedTrack(track.id);
+      if (onShowToast) onShowToast("Removed offline pin", "info");
+    } else {
+      const ok = await offlineCache.cacheTrack(track, album);
+      if (onShowToast) onShowToast(ok ? "Pinned offline" : "Couldn't pin track", ok ? "success" : "info");
+    }
+    setSongMenu(null);
+  };
+
+  const handleCopySongLink = async (track: Track, albumId?: string, trackNumber?: number) => {
+    const id = albumId || track.albumId;
+    if (!id) {
+      setSongMenu(null);
+      return;
+    }
+    try {
+      await navigator.clipboard?.writeText(linkForSong(id, trackNumber || track.trackNumber || 1));
+      if (onShowToast) onShowToast("Song link copied", "success");
+    } catch {
+      if (onShowToast) onShowToast("Couldn't copy link", "info");
+    }
+    setSongMenu(null);
   };
 
   // Offline Cached Audio state
@@ -772,7 +889,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           <button
             id="vault-capture-album-btn"
             onClick={onOpenCaptureModal}
-            className="flex-1 sm:flex-none h-9 px-3 bg-[var(--color-secondary-main)] hover:bg-[var(--color-secondary-light)] text-stone-950 font-semibold text-xs rounded-xl transition-all shadow flex items-center justify-center space-x-1.5 cursor-pointer whitespace-nowrap"
+            className="flex-1 sm:flex-none h-9 px-3 bg-[var(--color-secondary-main)] hover:bg-[var(--color-secondary-light)] text-stone-950 font-semibold text-xs rounded-full transition-all shadow flex items-center justify-center space-x-1.5 cursor-pointer whitespace-nowrap"
             title="Capture album or show by Archive.org URL or ID"
           >
             <Plus className="w-3.5 h-3.5 shrink-0" />
@@ -816,7 +933,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 : "bg-stone-900/90 hover:bg-stone-850 text-stone-400 hover:text-stone-200 border-stone-800"
             }`}
           >
-            <User className={`w-3.5 h-3.5 shrink-0 ${activeSubTab === "artists" ? "text-stone-950" : "text-[var(--color-secondary-main)]"}`} />
+            <User className={`w-3.5 h-3.5 shrink-0 ${activeSubTab === "artists" ? "text-stone-950" : "text-amber-400"}`} />
             <span>Artists</span>
           </button>
           <button
@@ -824,11 +941,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             onClick={() => setActiveSubTab("tierlists")}
             className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center space-x-1.5 whitespace-nowrap cursor-pointer shrink-0 snap-start border ${
               activeSubTab === "tierlists"
-                ? "bg-[var(--color-accent-light)] text-stone-950 border-[var(--color-accent-light)] font-semibold shadow-xs"
+                ? "bg-amber-500 text-stone-950 border-amber-500 font-semibold shadow-xs"
                 : "bg-stone-900/90 hover:bg-stone-850 text-stone-400 hover:text-stone-200 border-stone-800"
             }`}
           >
-            <Layers className={`w-3.5 h-3.5 shrink-0 ${activeSubTab === "tierlists" ? "text-stone-950" : "text-[var(--color-accent-light)]"}`} />
+            <Layers className={`w-3.5 h-3.5 shrink-0 ${activeSubTab === "tierlists" ? "text-stone-950" : "text-amber-400"}`} />
             <span>Tier Lists</span>
           </button>
           <button
@@ -836,7 +953,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             onClick={() => setActiveSubTab("playlists")}
             className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap cursor-pointer shrink-0 snap-start border ${
               activeSubTab === "playlists"
-                ? "bg-[var(--color-secondary-light)] text-stone-950 border-[var(--color-secondary-light)] font-semibold shadow-xs"
+                ? "bg-amber-500 text-stone-950 border-amber-500 font-semibold shadow-xs"
                 : "bg-stone-900/90 hover:bg-stone-850 text-stone-400 hover:text-stone-200 border-stone-800"
             }`}
           >
@@ -847,7 +964,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             onClick={() => setActiveSubTab("songs")}
             className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap cursor-pointer shrink-0 snap-start border ${
               activeSubTab === "songs"
-                ? "bg-stone-100 text-stone-950 border-stone-100 font-semibold shadow-xs"
+                ? "bg-amber-500 text-stone-950 border-amber-500 font-semibold shadow-xs"
                 : "bg-stone-900/90 hover:bg-stone-850 text-stone-400 hover:text-stone-200 border-stone-800"
             }`}
           >
@@ -891,10 +1008,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {activeSubTab === "offline" && (
         <div className="space-y-4">
           {/* Inner tabs: pinned cache vs device library */}
-          <div className="flex items-center space-x-1 p-1 rounded-xl bg-stone-900/60 border border-stone-800 w-fit">
+          <div className="flex items-center gap-1 p-1 rounded-full bg-stone-900/60 border border-stone-800 w-fit">
             <button
               onClick={() => setOfflineInnerTab("cached")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors cursor-pointer ${
                 offlineInnerTab === "cached"
                   ? "bg-emerald-500 text-stone-950"
                   : "text-stone-400 hover:text-stone-200"
@@ -904,7 +1021,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </button>
             <button
               onClick={() => setOfflineInnerTab("local")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors cursor-pointer ${
                 offlineInnerTab === "local"
                   ? "bg-sky-500 text-stone-950"
                   : "text-stone-400 hover:text-stone-200"
@@ -924,7 +1041,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <button
                 id="btn-offline-play-all"
                 onClick={handlePlayAllOffline}
-                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-xs transition-all flex items-center space-x-1.5 cursor-pointer shadow-md"
+                className="h-9 px-4 rounded-full bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-xs transition-colors flex items-center gap-2 cursor-pointer shadow-md"
               >
                 <Play className="w-3.5 h-3.5 fill-stone-950" />
                 <span>Play all</span>
@@ -932,7 +1049,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <button
                 id="btn-offline-shuffle-all"
                 onClick={handleShuffleAllOffline}
-                className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-850 text-stone-200 border border-stone-800 font-semibold text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
+                className="h-9 px-4 rounded-full bg-stone-900 hover:bg-stone-850 text-stone-200 border border-stone-800 font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <Shuffle className="w-3.5 h-3.5" />
                 <span>Shuffle</span>
@@ -940,7 +1057,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <button
                 id="btn-offline-clear-all"
                 onClick={handleClearAllOffline}
-                className="px-2.5 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-850 text-stone-400 hover:text-red-400 border border-stone-800 text-xs transition-colors cursor-pointer"
+                className="w-9 h-9 rounded-full grid place-items-center bg-stone-900 hover:bg-stone-850 text-stone-400 hover:text-red-400 border border-stone-800 text-xs transition-colors cursor-pointer"
                 title="Clear all offline cached tracks"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -1001,14 +1118,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </button>
             </div>
           ) : displayedOfflineItems.length === 0 ? (
-            <div className="py-12 text-center text-xs text-stone-400 bg-stone-900/30 border border-stone-800 rounded-xl">
-              No offline tracks match "{searchQuery}".
+            <div className="py-12 text-center space-y-3 rounded-2xl bg-stone-900/30 border border-stone-800 p-8">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mx-auto flex items-center justify-center text-emerald-400">
+                <Database className="w-7 h-7" />
+              </div>
+              <h3 className="text-sm font-bold text-stone-200">No matches</h3>
+              <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">
+                No offline tracks match "{searchQuery}".
+              </p>
             </div>
           ) : (
-            <div className="bg-stone-900/50 border border-stone-800 rounded-2xl overflow-hidden divide-y divide-stone-800/50">
-              <div className="px-3.5 py-2.5 bg-stone-950/60 text-[10px] uppercase font-semibold text-stone-500 flex items-center justify-between">
-                <span>Cached Track & Artist</span>
-                <span>Size & Playback</span>
+            <div className="bg-stone-900/50 border border-stone-800 rounded-2xl overflow-hidden divide-y divide-white/5">
+              <div className="px-3.5 py-2.5 bg-stone-950/60 text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500 flex items-center justify-between">
+                <span>Cached track & artist</span>
+                <span>Size & playback</span>
               </div>
               {displayedOfflineItems.map((item) => {
                 const isCurrent = currentTrack?.id === item.id;
@@ -1017,14 +1140,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 return (
                   <div
                     key={item.id}
-                    className={`group px-3 py-2.5 flex items-center justify-between text-xs transition-colors ${
-                      isCurrent ? "bg-emerald-500/10 text-emerald-300" : "hover:bg-stone-800/40 text-stone-200"
+                    className={`group px-3 py-2 flex items-center gap-3 text-xs border transition-colors ${
+                      isCurrent
+                        ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                        : "border-transparent hover:bg-white/5 text-stone-200"
                     }`}
                   >
-                    <div className="flex items-center space-x-3 min-w-0 flex-1 pr-2">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <button
                         onClick={() => handlePlayOfflineTrack(item)}
-                        className="relative w-8 h-8 rounded-lg overflow-hidden bg-stone-800 border border-stone-700 flex items-center justify-center shrink-0 cursor-pointer group-hover:border-emerald-500/50"
+                        aria-label={`Play ${item.title} offline`}
+                        className="relative w-8 h-8 rounded-lg overflow-hidden bg-stone-800 border border-stone-800 flex items-center justify-center shrink-0 cursor-pointer group-hover:border-emerald-500/50"
                         title="Play offline track"
                       >
                         {albumCover ? (
@@ -1038,36 +1164,38 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       </button>
 
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-xs text-stone-100 truncate flex items-center gap-1.5">
+                        <div className="font-medium text-[13px] leading-tight text-stone-100 truncate flex items-center gap-1.5">
                           <span className="truncate">{item.title}</span>
                           {isCurrent && (
                             <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                           )}
                         </div>
-                        <p className="text-stone-400 text-[11px] truncate mt-0.5">
+                        <p className="text-stone-500 text-[11px] truncate leading-tight mt-0.5">
                           {item.artist} <span className="text-stone-600">•</span> {item.album || "Offline Storage"}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-3 shrink-0">
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-800 text-stone-300">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[10px] tabular-nums px-2 py-0.5 rounded bg-stone-800 text-stone-300">
                         {sizeMb} MB
                       </span>
-                      <span className="font-mono text-[11px] text-stone-400">
+                      <span className="w-12 text-right text-[11px] tabular-nums text-stone-500">
                         {formatDuration(item.duration)}
                       </span>
                       <button
                         onClick={() => handlePlayOfflineTrack(item)}
-                        className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10 cursor-pointer"
+                        className="p-1.5 rounded-full text-emerald-400 hover:bg-white/10 transition-colors cursor-pointer sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
                         title="Play from offline storage"
+                        aria-label={`Play ${item.title} from offline storage`}
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
                       </button>
                       <button
                         onClick={() => handleRemoveOfflineItem(item.id, item.title)}
-                        className="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-stone-800 cursor-pointer transition-colors"
+                        className="p-1.5 rounded-full text-stone-500 hover:text-red-400 hover:bg-white/10 transition-colors cursor-pointer sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
                         title="Delete from offline cache"
+                        aria-label={`Delete ${item.title} from offline cache`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1115,7 +1243,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               {displayedAlbums.map((album) => (
                 <div
                   key={album.id}
-                  className="group bg-stone-900/50 hover:bg-stone-900 border border-stone-800 hover:border-stone-700 rounded-xl p-2.5 transition-colors cursor-pointer"
+                  className="group bg-stone-900/50 hover:bg-stone-900 border border-stone-800 hover:border-stone-700 rounded-2xl p-3 transition-colors cursor-pointer"
                   onClick={async () => {
                     // Vault copies captured during an outage can be trackless — refetch, else open as-is
                     if ((!album.tracks || album.tracks.length === 0) && album.identifier) {
@@ -1178,21 +1306,24 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {activeSubTab === "playlists" && (
         <div className="space-y-4">
           {(menuRows.length === 0 && (playlists.length > 0 || smartMixes.length > 0)) ? (
-            <div className="py-12 text-center text-xs text-stone-500 rounded-xl bg-stone-900/30 border border-stone-800 space-y-2">
-              <ListMusic className="w-8 h-8 mx-auto text-stone-600" />
-              <p>No playlists match "{searchQuery}".</p>
+            <div className="py-12 text-center space-y-3 rounded-2xl bg-stone-900/30 border border-stone-800 p-8">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 mx-auto flex items-center justify-center text-amber-400">
+                <ListMusic className="w-7 h-7" />
+              </div>
+              <h3 className="text-sm font-bold text-stone-200">No matches</h3>
+              <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">No playlists match "{searchQuery}".</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 pt-1">
               {/* Playlists sidebar selector */}
               <div className="md:col-span-1 space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center space-x-1.5">
-                    <ListMusic className="w-4 h-4 text-amber-400" />
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-                      Playlists
-                    </h3>
-                  </div>
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center space-x-1.5">
+                      <ListMusic className="w-4 h-4 text-amber-400" />
+                      <h3 className="text-xs sm:text-sm font-semibold text-stone-200">
+                        Playlists
+                      </h3>
+                    </div>
                   <button
                     onClick={() => setIsCreatingPlaylist(true)}
                     className="p-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs flex items-center space-x-1 cursor-pointer transition-colors"
@@ -1375,8 +1506,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       {activePlaylist.tracks.map((track, idx) => {
                         const isCurrent = currentTrack?.id === track.id;
                         return (
+                          <React.Fragment key={`${track.id}_${idx}`}>
                           <div
-                            key={`${track.id}_${idx}`}
                             onClick={() => playTrack(track, undefined, activePlaylist.tracks)}
                             className={`group flex items-center gap-3 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
                               isCurrent
@@ -1415,6 +1546,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                               </button>
                             </div>
                           </div>
+                          {renderLyricsPanel(track)}
+                          </React.Fragment>
                         );
                       })}
                     </div>
@@ -1423,10 +1556,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </div>
               ) : (
                 <div className="md:col-span-3 space-y-4">
-                  <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-8 text-center space-y-2">
-                  <ListMusic className="w-8 h-8 text-stone-600 mx-auto" />
+                  <div className="bg-stone-900/30 border border-stone-800 rounded-2xl p-8 text-center space-y-3">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 mx-auto flex items-center justify-center text-amber-400">
+                    <ListMusic className="w-7 h-7" />
+                  </div>
                   <h3 className="text-sm font-bold text-stone-200">No playlists yet</h3>
-                  <p className="text-xs text-stone-400">Hit New to create your first playlist.</p>
+                  <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">Hit New to create your first playlist.</p>
                   </div>
                 </div>
                 )}
@@ -1459,7 +1594,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <button
                   id="btn-random-play-all-songs"
                   onClick={handleRandomPlayAllSongs}
-                  className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs transition-colors flex items-center justify-center space-x-2 shadow-md cursor-pointer"
+                  className="flex-1 sm:flex-none h-9 px-4 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs transition-colors flex items-center justify-center gap-2 shadow-md cursor-pointer"
                   title="Random play all songs directly from Vault"
                 >
                   <Shuffle className="w-4 h-4" />
@@ -1470,7 +1605,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <button
                   id="btn-play-all-songs-in-order"
                   onClick={handlePlayAllSongsInOrder}
-                  className="px-3.5 py-2 rounded-xl bg-stone-850 hover:bg-stone-800 text-stone-200 text-xs font-medium transition-colors flex items-center space-x-1.5 border border-stone-750 cursor-pointer"
+                  className="h-9 px-3.5 rounded-full bg-stone-850 hover:bg-stone-800 text-stone-200 text-xs font-medium transition-colors flex items-center gap-1.5 border border-stone-750 cursor-pointer"
                   title="Play all songs in order"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
@@ -1482,9 +1617,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
           {/* Songs List */}
           <div className="bg-stone-900/50 border border-stone-800 rounded-2xl overflow-hidden divide-y divide-white/5">
-            <div className="px-3.5 py-2 bg-stone-950/60 text-[10px] uppercase font-semibold text-stone-500 flex items-center justify-between">
-              <span>Title & Artist</span>
-              <span>Duration & Actions</span>
+            <div className="px-3.5 py-2.5 bg-stone-950/60 text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500 flex items-center justify-between">
+              <span>Title & artist</span>
+              <span>Duration & actions</span>
             </div>
             {allSongs.length === 0 ? (
               <div className="py-16 text-center space-y-3 p-8">
@@ -1506,10 +1641,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               displayedSongs.map(({ track, album }, idx) => {
                 const isCurrent = currentTrack?.id === track.id;
                 return (
+                  <React.Fragment key={`${track.id}_${idx}`}>
                   <div
-                    key={`${track.id}_${idx}`}
                     onClick={() => handlePlaySongFromAll({ track, album })}
-                    className={`group px-3 py-2 flex items-center gap-3 text-xs transition-colors min-h-[46px] border cursor-pointer ${
+                    className={`group px-3 py-2 flex items-center gap-3 text-xs transition-colors min-h-[46px] border rounded-lg cursor-pointer ${
                       isCurrent
                         ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
                         : "border-transparent hover:bg-white/5 text-stone-200"
@@ -1564,7 +1699,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       {/* Overflow menu + Add to Playlist popup */}
                       <div className="relative">
                         <button
-                          onClick={(e) => openSongMenu(e, `songs_${track.id}_${idx}`, track, "songs")}
+                          onClick={(e) => openSongMenu(e, `songs_${track.id}_${idx}`, track, "songs", -1, album)}
                           aria-label={`More options for ${track.title}`}
                           className="p-1.5 rounded-full text-stone-500 hover:text-stone-100 hover:bg-white/10 transition-colors cursor-pointer sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
                           title="More options"
@@ -1574,14 +1709,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
                         {playlistMenuTrackId === track.id && (
                           <div
-                            className="absolute right-0 bottom-full mb-1 w-44 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1 z-30 space-y-0.5"
+                            className="absolute right-0 bottom-full mb-1 w-52 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 z-30 space-y-0.5"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <p className="text-[9px] uppercase text-stone-500 px-2 py-1 font-semibold">
-                              Add to Playlist:
+                            <p className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500 px-2.5 py-1">
+                              Add to playlist
                             </p>
                             {playlists.length === 0 ? (
-                              <p className="text-[11px] text-stone-500 px-2 py-1">No playlists yet</p>
+                              <p className="text-[11px] text-stone-500 px-2.5 py-1">No playlists yet</p>
                             ) : (
                               playlists.map((pl) => (
                                 <button
@@ -1590,7 +1725,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                                     onAddTrackToPlaylist(pl.id, track);
                                     setPlaylistMenuTrackId(null);
                                   }}
-                                  className="w-full text-left px-2 py-1 rounded-lg text-xs text-stone-300 hover:bg-stone-800 flex items-center justify-between transition-colors"
+                                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-stone-300 hover:bg-stone-800 flex items-center justify-between transition-colors"
                                 >
                                   <span className="truncate">{pl.name}</span>
                                   <Plus className="w-3 h-3 text-amber-400 shrink-0" />
@@ -1602,6 +1737,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       </div>
                     </div>
                   </div>
+                  {renderLyricsPanel(track)}
+                  </React.Fragment>
                 );
               })
             )}
@@ -1693,15 +1830,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           >
             <button
               type="button"
-              onClick={() => {
-                addToQueue(songMenu.track);
-                if (onShowToast) onShowToast(`Added "${songMenu.track.title}" to queue`, "success");
-                setSongMenu(null);
-              }}
+              onClick={() => handleTogglePin(songMenu.track, songMenu.album)}
               className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
             >
-              <ListMusic className="w-3.5 h-3.5 text-stone-500" />
-              <span>Add to Playback Queue</span>
+              <Database className={`w-3.5 h-3.5 ${offlineCache.isTrackCachedSync(songMenu.track.id) ? "text-emerald-400" : "text-stone-500"}`} />
+              <span>{offlineCache.isTrackCachedSync(songMenu.track.id) ? "Remove offline pin" : "Pin offline"}</span>
             </button>
             {songMenu.track.streamUrl && (
               <button
@@ -1720,6 +1853,48 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <span>Download</span>
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                addToQueue(songMenu.track);
+                if (onShowToast) onShowToast(`Added "${songMenu.track.title}" to queue`, "success");
+                setSongMenu(null);
+              }}
+              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+            >
+              <ListMusic className="w-3.5 h-3.5 text-stone-500" />
+              <span>Add to Playback Queue</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                playRelated(songMenu.track, songMenu.album);
+                setSongMenu(null);
+              }}
+              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+            >
+              <Radio className="w-3.5 h-3.5 text-stone-500" />
+              <span>Play Related</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCopySongLink(songMenu.track, songMenu.album?.identifier || songMenu.album?.id)}
+              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5 text-stone-500" />
+              <span>Copy link</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                handleToggleLyrics(songMenu.track, songMenu.album?.title || songMenu.track.album);
+                setSongMenu(null);
+              }}
+              className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
+            >
+              <Mic className={`w-3.5 h-3.5 ${lyricsOpenId === songMenu.track.id ? "text-amber-400" : "text-stone-500"}`} />
+              <span>Lyrics</span>
+            </button>
             {songMenu.context === "songs" && (
               <button
                 type="button"

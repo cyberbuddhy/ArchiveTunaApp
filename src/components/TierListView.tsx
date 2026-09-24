@@ -141,7 +141,7 @@ export const TierListView: React.FC<TierListViewProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-1.5">
             <Layers className="w-4 h-4 text-amber-400" />
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+            <h3 className="text-xs sm:text-sm font-semibold text-stone-200">
               Tier Lists
             </h3>
           </div>
@@ -188,7 +188,7 @@ export const TierListView: React.FC<TierListViewProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-xl"
+                className="h-8 px-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-full cursor-pointer"
               >
                 Create
               </button>
@@ -279,7 +279,7 @@ export const TierListView: React.FC<TierListViewProps> = ({
 
               {isExportMenuOpen && (
                 <div className="absolute right-0 top-full mt-1.5 w-48 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 z-40 space-y-1 text-xs animate-in fade-in">
-                  <div className="text-[10px] uppercase font-bold text-stone-500 px-2 py-1">
+                  <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500 px-2 py-1">
                     Export Options
                   </div>
 
@@ -446,10 +446,12 @@ export const TierListView: React.FC<TierListViewProps> = ({
         </div>
           </>
         ) : (
-          <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-8 text-center space-y-2">
-            <Layers className="w-8 h-8 text-stone-600 mx-auto" />
+          <div className="bg-stone-900/30 border border-stone-800 rounded-2xl p-8 text-center space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 mx-auto flex items-center justify-center text-amber-400">
+              <Layers className="w-7 h-7" />
+            </div>
             <h3 className="text-sm font-bold text-stone-200">No tier lists yet</h3>
-            <p className="text-xs text-stone-400">Hit New to create Tierlist #1.</p>
+            <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">Hit New to create Tierlist #1.</p>
           </div>
         )}
       </div>

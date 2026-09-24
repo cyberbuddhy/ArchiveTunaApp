@@ -127,7 +127,7 @@ export const DumpBackupModal: React.FC<DumpBackupModalProps> = ({
               <FolderArchive className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-stone-100">Library Backup & Restore</h2>
+              <h2 className="text-lg font-semibold text-stone-100">Library Backup & Restore</h2>
               <p className="text-xs text-stone-400">Dump your collection to a file and upload it back anytime</p>
             </div>
           </div>

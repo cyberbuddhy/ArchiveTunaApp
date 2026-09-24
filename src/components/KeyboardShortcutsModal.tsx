@@ -56,7 +56,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="keyboard-shortcuts-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
@@ -70,7 +70,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
               <Keyboard className="w-4.5 h-4.5" />
             </div>
             <div>
-              <h2 id="keyboard-shortcuts-title" className="text-base font-semibold text-stone-100">
+              <h2 id="keyboard-shortcuts-title" className="text-lg font-semibold text-stone-100">
                 Keyboard Navigation & Shortcuts
               </h2>
               <p className="text-xs text-stone-400">Full keyboard accessibility across all views</p>
@@ -90,7 +90,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-6">
           {sections.map((sec) => (
             <div key={sec.title} className="space-y-2.5">
-              <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-stone-300">
+              <div className="flex items-center space-x-2 text-xs sm:text-sm font-semibold text-stone-200">
                 {sec.icon}
                 <span>{sec.title}</span>
               </div>

@@ -78,10 +78,24 @@ app.get("/api/archive/search", async (req, res) => {
 
     let queryParts = ["mediatype:audio"];
 
-    // Collection filtering
+    // Collection & Audio Format filtering (mirrors the client query builder)
     if (collection && collection !== "all") {
       if (collection === "etree") {
         queryParts.push("(collection:etree OR collection:taperssection)");
+      } else if (collection === "georgeblood78s" || collection === "78rpm") {
+        queryParts.push("(collection:georgeblood78s OR collection:78rpm OR collection:great78)");
+      } else if (collection === "netlabels") {
+        queryParts.push("collection:netlabels");
+      } else if (collection === "audio_music") {
+        queryParts.push("collection:audio_music");
+      } else if (collection === "opensource_audio" || collection === "community") {
+        queryParts.push("(collection:opensource_audio OR collection:community)");
+      } else if (collection === "hiphopmixtapes") {
+        queryParts.push("(collection:hiphopmixtapes OR collection:datpiff)");
+      } else if (collection === "flac") {
+        queryParts.push("format:(\"Flac\" OR \"FLAC\")");
+      } else if (collection === "vbr_mp3") {
+        queryParts.push("format:(\"VBR MP3\" OR \"MP3\")");
       } else {
         queryParts.push(`collection:(${collection})`);
       }
@@ -105,12 +119,18 @@ app.get("/api/archive/search", async (req, res) => {
         case "1980s":
           queryParts.push("year:[1980 TO 1989]");
           break;
-        case "1970s":
-          queryParts.push("year:[1970 TO 1979]");
-          break;
-        case "vintage":
-          queryParts.push("year:[1900 TO 1969]");
-          break;
+      case "1970s":
+        queryParts.push("year:[1970 TO 1979]");
+        break;
+      case "1960s":
+        queryParts.push("year:[1960 TO 1969]");
+        break;
+      case "1950s":
+        queryParts.push("year:[1950 TO 1959]");
+        break;
+      case "vintage":
+        queryParts.push("year:[1900 TO 1969]");
+        break;
       }
     }
 
