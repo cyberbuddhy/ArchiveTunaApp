@@ -1,0 +1,1 @@
+Genre toolbar with collapsible list, working root Load More, edge-aligned capsule shelves, precise search with no stale caches.

@@ -7,8 +7,11 @@ android {
         applicationId "com.cyberbuddhy.archivetuna"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // F-Droid ritual: bump versionCode (+1) and versionName (match the
+        // release tag) on EVERY release. F-Droid only accepts higher vercodes
+        // and reads these literals with regex (no dynamic computation).
+        versionCode 7
+        versionName "0.2.0-beta.6"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -43,12 +46,3 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
-
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
-}

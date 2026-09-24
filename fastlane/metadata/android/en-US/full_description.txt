@@ -1,0 +1,14 @@
+ArchiveTuna is a music streaming app for the Archive.org audio collection:
+live concert taper recordings, 78 RPM shellac transfers, netlabels, and
+general audio.
+
+Everything is local-first: your vault library, playlists, tier lists,
+listen history, and offline pins live on your device. No account, no
+advertising, no tracking.
+
+Features:
+- Search across millions of Archive.org recordings with filters
+- Curated discovery shelves and era Time Capsules
+- Track radio, offline pinning, sleep timer, 10-band EQ
+- Background playback with notification controls
+- Share links for albums, songs, and playlists
