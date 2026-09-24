@@ -15,7 +15,7 @@ import {
 const inFlightAlbumRequests = new Map<string, Promise<Album>>();
 
 export function computeRelevanceScore(
-  item: { artist?: string; title?: string; downloads?: number },
+  item: { artist?: string; title?: string; downloads?: number; genre?: string; collection?: string; year?: string; identifier?: string },
   rawQuery: string
 ): number {
   if (!rawQuery) return 0;
@@ -24,6 +24,10 @@ export function computeRelevanceScore(
 
   const artist = (item.artist || "").toLowerCase();
   const title = (item.title || "").toLowerCase();
+  const genre = (item.genre || "").toLowerCase();
+  const collection = (item.collection || "").toLowerCase();
+  const identifier = (item.identifier || "").toLowerCase();
+  const year = String(item.year || "");
   const downloads = Number(item.downloads) || 0;
 
   let score = 0;
@@ -36,15 +40,47 @@ export function computeRelevanceScore(
     score += 500;
   }
 
-  // +300 points if item.title contains the search query
+  // +500 for an exact title match, +300 if item.title contains the search query
+  if (title === q) {
+    score += 500;
+  }
   if (title.includes(q)) {
     score += 300;
+  }
+
+  // Per-term field coverage: artist/title carry the most weight, subject and
+  // collection slug/identifier matches count less but still lift real hits
+  // (radio sessions, venue tapes) above coincidental ones.
+  const terms = searchTerms(q);
+  for (const t of terms) {
+    if (artist.includes(t)) score += 50;
+    if (title.includes(t)) score += 25;
+    if (genre.includes(t)) score += 10;
+    if (collection.includes(t)) score += 30;
+    if (identifier.includes(t)) score += 15;
+  }
+  if (terms.length > 0) {
+    if (terms.every((t) => artist.includes(t))) score += 400;
+    if (terms.every((t) => title.includes(t))) score += 200;
+    if (terms.every((t) => identifier.includes(t))) score += 150;
+  }
+
+  // Year digits in the query ("tame impala 2011") pin the recording year
+  if (terms.some((t) => /^\d{3,4}$/.test(t) && year && year.includes(t))) {
+    score += 250;
   }
 
   // + (Math.log10(downloads + 1) * 10) points to give a slight boost to popular downloads without overwhelming metadata exactness
   score += Math.log10(downloads + 1) * 10;
 
   return score;
+}
+
+// Quality gate: metadata-less blobs (no title AND no credited artist) are
+// unplayable mystery entries — drop them before ranking so they never
+// outrank real recordings on downloads alone.
+export function isSearchWorthy(doc: any): boolean {
+  return Boolean(doc && (doc.title || doc.creator));
 }
 
 // Fail-fast JSON fetch: archive.org advancedsearch can stall for minutes.
@@ -63,6 +99,58 @@ export async function fetchArchiveJson(url: string, timeoutMs = 12000): Promise<
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Multi-term search tokenizing: "Tame Impala kexp" must match a KEXP
+// session even though no single field holds the whole phrase. Stopwords and
+// punctuation collapse away; if every word is a stopword we keep them all.
+const SEARCH_STOPWORDS = new Set([
+  "the", "a", "an", "of", "and", "on", "in", "at", "to", "for", "with", "by", "from", "vs",
+]);
+
+export function searchTerms(rawQuery: string): string[] {
+  const words = rawQuery
+    .replace(/["\\]/g, " ")
+    .toLowerCase()
+    .split(/[\s,;|/\\\-_]+/)
+    .map((w) => w.replace(/[^a-z0-9]+/g, ""))
+    .filter((w) => w.length > 1);
+  const uniq = [...new Set(words)];
+  const meaningful = uniq.filter((w) => !SEARCH_STOPWORDS.has(w));
+  return meaningful.length > 0 ? meaningful : uniq;
+}
+
+// Builds the text portion of an archive.org query. Exact-phrase clauses keep
+// their boosts for precision; the token-AND group adds recall across creator,
+// title, subject, collection, and identifier slugs (kexp-style).
+export function buildTextQueryClause(query: string, field: string): string {
+  const cleanQ = query.replace(/"/g, "").trim();
+  const terms = searchTerms(cleanQ);
+  const f = (field || "all").trim();
+  if (f === "artist") {
+    // Exact creator credit wins (^10); per-term fallback spans creator/title/
+    // subject so sessions credited to shows (KEXP) still match the artist.
+    const exact = `creator:("${cleanQ}")^10`;
+    if (terms.length <= 1) return exact;
+    const wb = terms.map((t) => `(creator:${t} OR title:${t} OR subject:${t})`).join(" AND ");
+    return `(${exact} OR (${wb}))`;
+  }
+  if (f === "title") {
+    const exact = `title:("${cleanQ}")`;
+    if (terms.length <= 1) return exact;
+    return `(${exact} OR (${terms.map((t) => `title:${t}`).join(" AND ")}))`;
+  }
+  if (f === "genre") {
+    const exact = `subject:("${cleanQ}")`;
+    if (terms.length <= 1) return exact;
+    return `(${exact} OR (${terms.map((t) => `subject:${t}`).join(" AND ")}))`;
+  }
+  const exact = `(creator:("${cleanQ}")^8 OR title:("${cleanQ}")^4 OR subject:("${cleanQ}")^2 OR collection:("${cleanQ}")^2 OR ("${cleanQ}"))`;
+  if (terms.length <= 1) return exact;
+  const fieldFor = (t: string) =>
+    `(creator:${t} OR title:${t} OR subject:${t} OR collection:${t} OR identifier:${t}*${/^\d{3,4}$/.test(t) ? ` OR year:${t}` : ""})`;
+  const anywhere = terms.map(fieldFor).join(" AND ");
+  return `(${exact} OR (${anywhere}))`;
 }
 
 export async function searchArchive(params: {
@@ -185,18 +273,9 @@ export async function searchArchive(params: {
     }
   }
 
-  // Query and Field targeted search
+  // Query and Field targeted search (exact phrases boosted, token-AND for recall)
   if (query) {
-    const cleanQ = query.replace(/"/g, "").trim();
-    if (field === "artist") {
-      queryParts.push(`creator:("${cleanQ}")`);
-    } else if (field === "title") {
-      queryParts.push(`title:("${cleanQ}")`);
-    } else if (field === "genre") {
-      queryParts.push(`subject:("${cleanQ}")`);
-    } else {
-      queryParts.push(`(creator:("${cleanQ}")^8 OR title:("${cleanQ}")^4 OR subject:("${cleanQ}")^2 OR ("${cleanQ}"))`);
-    }
+    queryParts.push(buildTextQueryClause(query, field));
   } else if (!collection || collection === "all") {
     queryParts.push("(collection:etree OR collection:netlabels OR collection:georgeblood78s OR collection:audio_music)");
   }
@@ -224,11 +303,14 @@ export async function searchArchive(params: {
 
   const response = await fetchArchiveJson(searchUrl.toString());
   const data = response;
-  const docs = data?.response?.docs || [];
+  const docs = (data?.response?.docs || []).filter(isSearchWorthy);
   const numFound = data?.response?.numFound || 0;
 
-  // Cache raw response for instant 0ms retrieval on back-navigation or repeat searches
-  setCachedArchiveSearch(cacheKey, { docs, total: numFound });
+  // Cache raw response for instant 0ms retrieval on back-navigation or repeat searches.
+  // Empties stay uncached so a failed query is retryable, not frozen as zero results.
+  if (docs.length > 0) {
+    setCachedArchiveSearch(cacheKey, { docs, total: numFound });
+  }
 
   const items = docs.map((doc: any) => {
     const id = doc.identifier;
@@ -463,8 +545,6 @@ export async function resolveUrlOrIdentifier(url: string): Promise<{ resolvedTyp
   throw new Error("Could not identify or resolve Archive.org album or audio link");
 }
 
-const MB_USER_AGENT = "MusicVaultApp/1.0.0 (https://github.com/my-app/music-vault)";
-
 const COUNTRY_NAMES: Record<string, string> = {
   US: "United States",
   GB: "United Kingdom",
@@ -502,16 +582,8 @@ export async function searchArtists(query: string): Promise<MatchedArtist[]> {
     const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(
       cleanQuery
     )}&fmt=json`;
-    const mbRes = await fetch(mbSearchUrl, {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": MB_USER_AGENT,
-      },
-    });
+    const mbData = await fetchArchiveJson(mbSearchUrl);
 
-    if (!mbRes.ok) return [];
-
-    const mbData = await mbRes.json();
     const rawArtists = mbData.artists || [];
     if (rawArtists.length === 0) return [];
 
@@ -537,15 +609,10 @@ export async function searchArtists(query: string): Promise<MatchedArtist[]> {
             const rgUrl = `https://musicbrainz.org/ws/2/release-group?artist=${encodeURIComponent(
               a.id
             )}&limit=1&fmt=json`;
-            const rgRes = await fetch(rgUrl, {
-              headers: { Accept: "application/json", "User-Agent": MB_USER_AGENT },
-            });
-            if (rgRes.ok) {
-              const rgData = await rgRes.json();
-              const rgs = rgData["release-groups"] || [];
-              if (rgs.length > 0 && rgs[0].id) {
-                coverUrl = `https://coverartarchive.org/release-group/${rgs[0].id}/front-250`;
-              }
+            const rgData = await fetchArchiveJson(rgUrl);
+            const rgs = rgData["release-groups"] || [];
+            if (rgs.length > 0 && rgs[0].id) {
+              coverUrl = `https://coverartarchive.org/release-group/${rgs[0].id}/front-250`;
             }
           } catch {
             // non-fatal
@@ -618,11 +685,8 @@ export async function searchStreamsForRelease(
   archiveUrl.searchParams.append("fl[]", "description");
 
   try {
-    const res = await fetch(archiveUrl.toString(), {
-      headers: { Accept: "application/json" },
-    });
-    if (res.ok) {
-      const data = await res.json();
+    {
+      const data = await fetchArchiveJson(archiveUrl.toString());
       const docs = data?.response?.docs || [];
       if (docs.length > 0) {
         const results = docs.map((doc: any) => {
@@ -652,11 +716,8 @@ export async function searchStreamsForRelease(
     // Secondary relaxed query if primary had 0 results
     const relaxedQuery = `("${cleanArtist}") AND ("${cleanTitle}") AND mediatype:(audio)`;
     archiveUrl.searchParams.set("q", relaxedQuery);
-    const res2 = await fetch(archiveUrl.toString(), {
-      headers: { Accept: "application/json" },
-    });
-    if (res2.ok) {
-      const data2 = await res2.json();
+    {
+      const data2 = await fetchArchiveJson(archiveUrl.toString());
       const docs2 = data2?.response?.docs || [];
       const results2 = docs2.map((doc: any) => {
         const id = doc.identifier;
@@ -701,80 +762,74 @@ export async function fetchArtistDiscography(artistName: string): Promise<Artist
 
   try {
     const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(cleanName)}&fmt=json`;
-    const mbRes = await fetch(mbSearchUrl, {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": MB_USER_AGENT,
-      },
-    });
-    if (mbRes.ok) {
-      const mbData = await mbRes.json();
-      const artists = mbData.artists || [];
-      if (artists.length > 0) {
-        mbArtist = artists.find((a: any) => a.name.toLowerCase() === cleanName.toLowerCase()) || artists[0];
-        if (mbArtist && mbArtist.id) {
-          const rgUrl = `https://musicbrainz.org/ws/2/release-group?artist=${encodeURIComponent(mbArtist.id)}&limit=100&fmt=json`;
-          const rgRes = await fetch(rgUrl, {
-            headers: {
-              Accept: "application/json",
-              "User-Agent": MB_USER_AGENT,
-            },
-          });
-          if (rgRes.ok) {
-            const rgData = await rgRes.json();
-            releaseGroups = rgData["release-groups"] || [];
-          }
-        }
+    const mbData = await fetchArchiveJson(mbSearchUrl);
+    const artists = mbData.artists || [];
+    if (artists.length > 0) {
+      mbArtist = artists.find((a: any) => a.name.toLowerCase() === cleanName.toLowerCase()) || artists[0];
+      if (mbArtist && mbArtist.id) {
+        const rgUrl = `https://musicbrainz.org/ws/2/release-group?artist=${encodeURIComponent(mbArtist.id)}&limit=100&fmt=json`;
+        const rgData = await fetchArchiveJson(rgUrl);
+        releaseGroups = rgData["release-groups"] || [];
       }
     }
   } catch (err) {
     console.warn("MusicBrainz query warning:", err);
   }
 
-  // Fetch Live Tapes & Concerts from Archive.org
+  // Fetch Live Tapes & Concerts from Archive.org.
+  // Primary: exact creator credit. Fallback: tokenized across creator/title/
+  // subject/collection/identifier — taper and radio-show uploads (KEXP etc.)
+  // credit the show, not the artist, so exact-creator finds nothing.
   const cleanArtist = cleanName.replace(/"/g, "");
-  const liveSearchQuery = `creator:("${cleanArtist}") AND mediatype:(audio)`;
-  const archiveUrl = new URL("https://archive.org/advancedsearch.php");
-  archiveUrl.searchParams.set("q", liveSearchQuery);
-  archiveUrl.searchParams.set("output", "json");
-  archiveUrl.searchParams.set("rows", "60");
-  archiveUrl.searchParams.set("sort[]", "date desc");
-  archiveUrl.searchParams.append("fl[]", "identifier");
-  archiveUrl.searchParams.append("fl[]", "title");
-  archiveUrl.searchParams.append("fl[]", "creator");
-  archiveUrl.searchParams.append("fl[]", "year");
-  archiveUrl.searchParams.append("fl[]", "date");
-  archiveUrl.searchParams.append("fl[]", "downloads");
-  archiveUrl.searchParams.append("fl[]", "collection");
-  archiveUrl.searchParams.append("fl[]", "description");
+  const runLiveQuery = async (q: string, sort: string) => {
+    const url = new URL("https://archive.org/advancedsearch.php");
+    url.searchParams.set("q", q);
+    url.searchParams.set("output", "json");
+    url.searchParams.set("rows", "60");
+    url.searchParams.set("sort[]", sort);
+    ["identifier", "title", "creator", "year", "date", "downloads", "collection", "description"].forEach((f) =>
+      url.searchParams.append("fl[]", f)
+    );
+    const arcData = await fetchArchiveJson(url.toString());
+    return {
+      total: arcData?.response?.numFound || 0,
+      docs: arcData?.response?.docs || [],
+    };
+  };
+  const mapLiveDoc = (doc: any) => {
+    const id = doc.identifier;
+    const col = Array.isArray(doc.collection) ? doc.collection[0] : doc.collection || "audio";
+    return {
+      id,
+      identifier: id,
+      title: doc.title || id,
+      artist: Array.isArray(doc.creator) ? doc.creator.join(", ") : doc.creator || cleanName,
+      year: doc.year || (doc.date ? String(doc.date).substring(0, 4) : ""),
+      date: doc.date || (doc.year ? String(doc.year) : ""),
+      downloads: doc.downloads || 0,
+      collection: col,
+      coverUrl: `https://archive.org/services/img/${id}`,
+      description: typeof doc.description === "string" ? doc.description.replace(/<[^>]*>?/gm, "").substring(0, 200) : "",
+    };
+  };
 
   let liveTapes: any[] = [];
   let totalLiveTapes = 0;
 
   try {
-    const arcRes = await fetch(archiveUrl.toString(), {
-      headers: { Accept: "application/json" },
-    });
-    if (arcRes.ok) {
-      const arcData = await arcRes.json();
-      const docs = arcData?.response?.docs || [];
-      totalLiveTapes = arcData?.response?.numFound || 0;
-      liveTapes = docs.map((doc: any) => {
-        const id = doc.identifier;
-        const col = Array.isArray(doc.collection) ? doc.collection[0] : doc.collection || "audio";
-        return {
-          id,
-          identifier: id,
-          title: doc.title || id,
-          artist: Array.isArray(doc.creator) ? doc.creator.join(", ") : doc.creator || cleanName,
-          year: doc.year || (doc.date ? String(doc.date).substring(0, 4) : ""),
-          date: doc.date || (doc.year ? String(doc.year) : ""),
-          downloads: doc.downloads || 0,
-          collection: col,
-          coverUrl: `https://archive.org/services/img/${id}`,
-          description: typeof doc.description === "string" ? doc.description.replace(/<[^>]*>?/gm, "").substring(0, 200) : "",
-        };
-      });
+    const primary = await runLiveQuery(`creator:("${cleanArtist}") AND mediatype:(audio)`, "date desc");
+    totalLiveTapes = primary.total;
+    liveTapes = primary.docs.map(mapLiveDoc);
+    if (totalLiveTapes === 0) {
+      const terms = searchTerms(cleanArtist);
+      if (terms.length > 0) {
+        const fallbackQ = `(${terms
+          .map((t) => `(creator:${t} OR title:${t} OR subject:${t} OR collection:${t} OR identifier:${t}*)`)
+          .join(" AND ")}) AND mediatype:(audio)`;
+        const fallback = await runLiveQuery(fallbackQ, "downloads desc");
+        totalLiveTapes = fallback.total;
+        liveTapes = fallback.docs.map(mapLiveDoc);
+      }
     }
   } catch (err) {
     console.warn("Archive.org live query warning:", err);
@@ -868,7 +923,11 @@ export async function fetchArtistDiscography(artistName: string): Promise<Artist
     totalLiveTapes,
   };
 
-  setCachedDiscography(cleanName, discographyResult);
+  // Never cache empties: a failed fetch must stay retryable instead of
+  // haunting the whole tab session as a stale zero-result entry.
+  if (releaseGroups.length > 0 || totalLiveTapes > 0) {
+    setCachedDiscography(cleanName, discographyResult);
+  }
   return discographyResult;
 }
 

@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Play,
   Plus,
   Check,
@@ -43,6 +45,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   // Drill-down path inside the explorer (e.g. Rock -> Psychedelic Rock)
   const [dropdownPath, setDropdownPath] = useState<GenreNode[]>([]);
   const [genreSearch, setGenreSearch] = useState("");
+  const [isGenreListOpen, setIsGenreListOpen] = useState(true);
 
   // Current node inside dropdown explorer
   const currentDropdownNode: GenreNode | null =
@@ -194,7 +197,8 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   };
 
   const handleExtendRecordings = async () => {
-    if (!currentQuery || isLoadingMore || isLoading) return;
+    // Empty query = featured classics root: still pageable, just no text filter
+    if (isLoadingMore || isLoading) return;
     const nextPage = currentPage + 1;
     setIsLoadingMore(true);
     try {
@@ -287,8 +291,46 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
         id="genre-list"
         className="p-4 bg-stone-900/90 border border-stone-800 rounded-2xl shadow-sm space-y-3.5"
       >
-            {/* Top Toolbar: Navigation / Breadcrumbs & Quick Search */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-stone-800 pb-3">
+            {/* Top Toolbar: genre search (left) + collapse toggle */}
+            <div className="flex items-center gap-2 border-b border-stone-800 pb-3">
+              {/* Fast genre search input */}
+              <div className="relative flex-1 sm:flex-none sm:w-64">
+                <Search className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={genreSearch}
+                  onChange={(e) => {
+                    setGenreSearch(e.target.value);
+                    if (e.target.value.trim()) setIsGenreListOpen(true);
+                  }}
+                  placeholder="Search any genre or subgenre..."
+                  className="w-full pl-8 pr-7 py-1.5 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-200 placeholder-stone-500 focus:border-amber-500 focus:outline-none"
+                />
+                {genreSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setGenreSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 p-0.5 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {/* Collapse toggle */}
+              <button
+                type="button"
+                onClick={() => setIsGenreListOpen((v) => !v)}
+                className="p-1.5 rounded-full text-stone-500 hover:text-stone-100 hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+                title={isGenreListOpen ? "Hide genre list" : "Show genre list"}
+                aria-label={isGenreListOpen ? "Hide genre list" : "Show genre list"}
+                aria-expanded={isGenreListOpen}
+              >
+                {isGenreListOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {/* Breadcrumbs — only when searching or drilled in */}
+            {(genreSearch.trim() || dropdownPath.length > 0) && (
               <div className="flex items-center flex-wrap gap-2 text-xs">
                 {genreSearch.trim() ? (
                   <>
@@ -297,7 +339,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                       ({searchResults.length})
                     </span>
                   </>
-                ) : dropdownPath.length > 0 ? (
+                ) : (
                   <div className="flex items-center flex-wrap gap-1.5">
                     <button
                       type="button"
@@ -340,32 +382,13 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                       );
                     })}
                   </div>
-                ) : null}
-              </div>
-
-              {/* Fast genre search input */}
-              <div className="relative w-full sm:w-64 shrink-0">
-                <Search className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={genreSearch}
-                  onChange={(e) => setGenreSearch(e.target.value)}
-                  placeholder="Search any genre or subgenre..."
-                  className="w-full pl-8 pr-7 py-1.5 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-200 placeholder-stone-500 focus:border-amber-500 focus:outline-none"
-                />
-                {genreSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setGenreSearch("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 p-0.5 cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
                 )}
               </div>
-            </div>
+            )}
 
-            {/* Grid of Genres in Dropdown */}
+            {/* Grid of Genres in Dropdown (collapsible via toolbar chevron) */}
+            {isGenreListOpen && (
+            <>
             {genreSearch.trim() ? (
               searchResults.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-72 overflow-y-auto pr-1">
@@ -467,6 +490,8 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                 })}
               </div>
             )}
+            </>
+            )}
           </div>
 
       {/* Time Capsules — 3 cycling eras above the grid, same header language as Featured */}
@@ -493,7 +518,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             )}
           </div>
           {capsulesLoading ? (
-            <div className="grid grid-flow-col auto-cols-[9rem] sm:auto-cols-[10.5rem] gap-3 sm:gap-4 overflow-hidden">
+            <div className="grid grid-flow-col auto-cols-[calc((100%_-_0.75rem)/2)] sm:auto-cols-[calc((100%_-_2rem)/3)] lg:auto-cols-[calc((100%_-_3rem)/4)] xl:auto-cols-[calc((100%_-_4rem)/5)] gap-3 sm:gap-4 overflow-hidden">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="rounded-2xl border border-stone-800 bg-stone-900/40 p-3 animate-pulse">
                   <div className="aspect-square rounded-xl bg-stone-800 mb-2.5" />
@@ -510,7 +535,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     <span className="text-xs font-bold text-amber-300 shrink-0">{cap.label}</span>
                     <span className="text-[11px] text-stone-500 truncate">{cap.blurb}</span>
                   </div>
-                  <div className="grid grid-flow-col auto-cols-[9rem] sm:auto-cols-[10.5rem] gap-3 sm:gap-4 overflow-x-auto pb-1 scrollbar-none snap-x touch-pan-x">
+                  <div className="grid grid-flow-col auto-cols-[calc((100%_-_0.75rem)/2)] sm:auto-cols-[calc((100%_-_2rem)/3)] lg:auto-cols-[calc((100%_-_3rem)/4)] xl:auto-cols-[calc((100%_-_4rem)/5)] gap-3 sm:gap-4 overflow-x-auto pb-1 scrollbar-none snap-x snap-mandatory touch-pan-x">
                     {cap.items.map((item) => (
                       <div
                         key={item.identifier}

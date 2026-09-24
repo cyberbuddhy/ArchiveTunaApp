@@ -78,6 +78,50 @@ app.get("/api/archive/search", async (req, res) => {
 
     let queryParts = ["mediatype:audio"];
 
+    // Multi-term tokenizing (mirrors the client builder): exact phrases keep
+    // boosts, token-AND groups add recall across fields + identifier slugs.
+    const SEARCH_STOPWORDS = new Set([
+      "the", "a", "an", "of", "and", "on", "in", "at", "to", "for", "with", "by", "from", "vs",
+    ]);
+    const searchTerms = (rawQuery: string): string[] => {
+      const words = rawQuery
+        .replace(/["\\]/g, " ")
+        .toLowerCase()
+        .split(/[\s,;|/\\\-_]+/)
+        .map((w) => w.replace(/[^a-z0-9]+/g, ""))
+        .filter((w) => w.length > 1);
+      const uniq = [...new Set(words)];
+      const meaningful = uniq.filter((w) => !SEARCH_STOPWORDS.has(w));
+      return meaningful.length > 0 ? meaningful : uniq;
+    };
+    const buildTextClause = (q: string, f: string): string => {
+      const cleanQ = q.replace(/"/g, "").trim();
+      const terms = searchTerms(cleanQ);
+      const ff = (f || "all").trim();
+      if (ff === "artist") {
+        const exact = `creator:("${cleanQ}")^10`;
+        if (terms.length <= 1) return exact;
+        const wb = terms.map((t) => `(creator:${t} OR title:${t} OR subject:${t})`).join(" AND ");
+        return `(${exact} OR (${wb}))`;
+      }
+      if (ff === "title") {
+        const exact = `title:("${cleanQ}")`;
+        if (terms.length <= 1) return exact;
+        return `(${exact} OR (${terms.map((t) => `title:${t}`).join(" AND ")}))`;
+      }
+      if (ff === "genre") {
+        const exact = `subject:("${cleanQ}")`;
+        if (terms.length <= 1) return exact;
+        return `(${exact} OR (${terms.map((t) => `subject:${t}`).join(" AND ")}))`;
+      }
+      const exact = `(creator:("${cleanQ}")^8 OR title:("${cleanQ}")^4 OR subject:("${cleanQ}")^2 OR collection:("${cleanQ}")^2 OR ("${cleanQ}"))`;
+      if (terms.length <= 1) return exact;
+      const fieldFor = (t: string) =>
+        `(creator:${t} OR title:${t} OR subject:${t} OR collection:${t} OR identifier:${t}*${/^\d{3,4}$/.test(t) ? ` OR year:${t}` : ""})`;
+      const anywhere = terms.map(fieldFor).join(" AND ");
+      return `(${exact} OR (${anywhere}))`;
+    };
+
     // Collection & Audio Format filtering (mirrors the client query builder)
     if (collection && collection !== "all") {
       if (collection === "etree") {
@@ -134,22 +178,9 @@ app.get("/api/archive/search", async (req, res) => {
       }
     }
 
-    // Query and Field targeted search
+    // Query and Field targeted search (exact phrases boosted, token-AND for recall)
     if (query) {
-      const cleanQ = query.replace(/"/g, "").trim();
-      if (field === "artist") {
-        // High-precision artist / creator filter in Archive.org metadata schema
-        queryParts.push(`creator:("${cleanQ}")`);
-      } else if (field === "title") {
-        // Target album or track title specifically
-        queryParts.push(`title:("${cleanQ}")`);
-      } else if (field === "genre") {
-        // Target genre / subject specifically
-        queryParts.push(`subject:("${cleanQ}")`);
-      } else {
-        // General search across all fields with Lucene query boosting
-        queryParts.push(`(creator:("${cleanQ}")^8 OR title:("${cleanQ}")^4 OR subject:("${cleanQ}")^2 OR ("${cleanQ}"))`);
-      }
+      queryParts.push(buildTextClause(query, field));
     } else if (!collection || collection === "all") {
       // If empty query, pull notable curated audio
       queryParts.push("(collection:etree OR collection:netlabels OR collection:georgeblood78s OR collection:audio_music)");

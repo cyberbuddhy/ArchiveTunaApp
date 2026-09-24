@@ -9,9 +9,10 @@ const autocompleteMemoryCache = new Map<string, AutocompleteItem[]>();
 const archiveSearchMemoryCache = new Map<string, { docs: any[]; total: number }>();
 const albumDetailsMemoryCache = new Map<string, Album>();
 
-// Helpers for SessionStorage persistence (survives tab switches and reloads)
-function getFromSession<T>(key: string): T | null {
-  try {
+// Cache namespace — bump to invalidate stale entries app-wide after query
+// builder fixes (stale empties otherwise survive the whole tab session).
+const CACHE_VERSION = "v2";
+function getFromSession<T>(key: string): T | null {  try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
     return JSON.parse(raw) as T;
@@ -61,7 +62,7 @@ export function getCachedDiscography(artistName: string): ArtistDiscographyData 
   if (discographyMemoryCache.has(k)) {
     return discographyMemoryCache.get(k)!;
   }
-  const fromSession = getFromSession<ArtistDiscographyData>(`mb_disco_${k}`);
+  const fromSession = getFromSession<ArtistDiscographyData>(`mb_disco_${CACHE_VERSION}_${k}`);
   if (fromSession) {
     discographyMemoryCache.set(k, fromSession);
     return fromSession;
@@ -73,7 +74,7 @@ export function setCachedDiscography(artistName: string, data: ArtistDiscography
   const k = normalizeKey(artistName);
   if (!k) return;
   discographyMemoryCache.set(k, data);
-  saveToSession(`mb_disco_${k}`, data);
+  saveToSession(`mb_disco_${CACHE_VERSION}_${k}`, data);
 }
 
 // --- Release Streams Cache ---
@@ -116,7 +117,7 @@ export function getCachedArchiveSearch(cacheKey: string): { docs: any[]; total: 
   if (archiveSearchMemoryCache.has(k)) {
     return archiveSearchMemoryCache.get(k)!;
   }
-  const fromSession = getFromSession<{ docs: any[]; total: number }>(`arch_s_${k}`);
+  const fromSession = getFromSession<{ docs: any[]; total: number }>(`arch_s_${CACHE_VERSION}_${k}`);
   if (fromSession) {
     archiveSearchMemoryCache.set(k, fromSession);
     return fromSession;
@@ -133,7 +134,7 @@ export function setCachedArchiveSearch(cacheKey: string, data: { docs: any[]; to
     if (firstKey) archiveSearchMemoryCache.delete(firstKey);
   }
   archiveSearchMemoryCache.set(k, data);
-  saveToSession(`arch_s_${k}`, data);
+  saveToSession(`arch_s_${CACHE_VERSION}_${k}`, data);
 }
 
 // --- Album Details Cache ---
