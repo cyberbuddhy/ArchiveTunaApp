@@ -1,0 +1,1 @@
+F-Droid submission kit (LICENSE, README, fastlane) plus phone screenshots.
