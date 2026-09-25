@@ -1,0 +1,1 @@
+In-app update banner, manual update check in Settings, commit identity cleanup.

@@ -23,6 +23,8 @@ import {
   CloudOff,
   Database,
   Trash,
+  RefreshCw,
+  ExternalLink,
 } from "lucide-react";
 import { THEMES, ThemeDefinition } from "../services/themes";
 import {
@@ -33,6 +35,7 @@ import {
 import { EQ_FREQS } from "../services/audioEngine";
 import { Album, Playlist } from "../types";
 import { dumpLibraryToFile, parseAndValidateDump, restoreLibraryFromDump, getStoredHistory } from "../services/storage";
+import { checkForAppUpdate, isNativeApp, openRelease } from "../services/appUpdate";
 import { offlineCache } from "../services/offlineCache";
 
 interface SettingsModalProps {
@@ -75,6 +78,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);  const [restoreMode, setRestoreMode] = useState<"merge" | "replace">("merge");
   const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+
+  const handleCheckForUpdates = async () => {
+    setIsCheckingUpdate(true);
+    try {
+      const info = await checkForAppUpdate();
+      if (info) {
+        if (onShowToast) onShowToast(`New version ${info.tag} available!`, "success");
+        await openRelease(info.url);
+      } else if (onShowToast) {
+        onShowToast("You're on the latest version.", "info");
+      }
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
   const [eqName, setEqName] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -830,6 +849,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <span>{restoreError}</span>
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* App Updates — manual check + GitHub releases hyperlink */}
+              <div className="p-4 rounded-xl bg-stone-950/40 border border-stone-850 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-stone-200">App Updates</h4>
+                    <p className="text-stone-400 text-[11px]">
+                      Check for a newer release, or browse all versions on GitHub.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isNativeApp() && (
+                      <button
+                        onClick={handleCheckForUpdates}
+                        disabled={isCheckingUpdate}
+                        className="h-9 px-3 rounded-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-stone-950 font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdate ? "animate-spin" : ""}`} />
+                        <span>{isCheckingUpdate ? "Checking…" : "Check for updates"}</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => openRelease("https://github.com/cyberbuddhy/ArchiveTunaApp/releases")}
+                      className="h-9 px-3 rounded-full border border-white/10 text-stone-300 hover:text-stone-100 hover:border-white/20 hover:bg-white/5 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                      title="Open all releases on GitHub"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>GitHub releases</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 

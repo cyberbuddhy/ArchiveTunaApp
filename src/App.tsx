@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from "react";
 import { PlayerProvider } from "./context/PlayerContext";
 import { Navbar, NavTabType } from "./components/Navbar";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 const PlayerBar = lazy(() => import("./components/PlayerBar").then((m) => ({ default: m.PlayerBar })));
 const SearchView = lazy(() => import("./components/SearchView").then((m) => ({ default: m.SearchView })));
@@ -585,6 +586,7 @@ export default function App() {
 
         {/* Main Content Area: active tab only (code-split per tab for fast first paint) */}
         <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 pt-4 sm:pt-5 pb-36 sm:pb-12">
+          <UpdateBanner />
           <Suspense fallback={tabFallback}>
           {activeTab === "search" && (
             <SearchView
