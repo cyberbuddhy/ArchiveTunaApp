@@ -262,3 +262,15 @@ body {
 
 /* Custom dual-accent gradient utilities (used via theme variables) */
 
+/* Surprise easter egg: flashing rainbow border around the GIF cover */
+@keyframes surprise-border-flash {
+  0%, 100% { border-color: #FBBF24; }
+  20% { border-color: #FB7185; }
+  40% { border-color: #34D399; }
+  60% { border-color: #38BDF8; }
+  80% { border-color: #C084FC; }
+}
+.surprise-flash {
+  animation: surprise-border-flash 1.2s linear infinite;
+}
+

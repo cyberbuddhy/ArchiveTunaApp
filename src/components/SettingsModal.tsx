@@ -256,25 +256,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <h2 className="text-lg font-semibold text-stone-100 flex items-center space-x-2">
                 <span>Vault & Player Settings</span>
               </h2>
-              <p className="text-[11px] text-stone-400">
-                Atmosphere palette, audio engine, and archive vault preferences
-              </p>
             </div>
           </div>
-          <div className="flex items-center space-x-1.5">
-            {onOpenShortcuts && (
-              <button
-                id="btn-settings-keybinds"
-                onClick={onOpenShortcuts}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium text-stone-300 hover:text-amber-400 bg-stone-850 hover:bg-stone-800 border border-stone-750 transition-colors cursor-pointer flex items-center space-x-1.5"
-                title="Keyboard navigation & shortcuts (Press ?)"
-                aria-label="Open keyboard shortcuts"
-              >
-                <Keyboard className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-[11px] font-semibold text-stone-200">Keybinds</span>
-                <kbd className="text-[10px] text-stone-400 font-mono bg-stone-950 px-1 rounded border border-stone-700">?</kbd>
-              </button>
-            )}
+          <div className="flex items-center">
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition-colors cursor-pointer"
@@ -398,11 +382,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <Radio className="w-4 h-4 text-amber-400" />
-                    <div>
-                      <h4 className="text-sm font-semibold text-stone-200">Archive Stream Fidelity</h4>
-                      <p className="text-stone-400 text-[11px]">
-                        Select preferred audio stream format when loading tapes from Archive.org
-                      </p>
+                      <div>
+                      <h4 className="text-sm font-semibold text-stone-200">Stream Fidelity</h4>
                     </div>
                   </div>
                 </div>
@@ -435,9 +416,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <Moon className="w-4 h-4 text-amber-400" />
                     <div>
                       <h4 className="text-sm font-semibold text-stone-200">Sleep Timer</h4>
-                      <p className="text-stone-400 text-[11px]">
-                        Gently stop playback when falling asleep to live concert recordings
-                      </p>
                     </div>
                   </div>
                   {sleepRemainingText && (
@@ -478,7 +456,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <Gauge className="w-4 h-4 text-amber-400" />
                     <h4 className="text-sm font-semibold text-stone-200">Playback Speed</h4>
                   </div>
-                  <p className="text-stone-400 text-[11px]">Default rate for tapes & spoken archive</p>
                   <div className="flex gap-1.5 pt-1">
                     {[0.8, 1.0, 1.25, 1.5].map((rate) => (
                       <button
@@ -502,7 +479,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <Waves className="w-4 h-4 text-amber-400" />
                     <h4 className="text-sm font-semibold text-stone-200">Track Transition</h4>
                   </div>
-                  <p className="text-stone-400 text-[11px]">Seamless gapless transition curve</p>
                   <div className="flex gap-1.5 pt-1">
                     {[
                       { sec: 0, label: "Gapless" },
@@ -525,17 +501,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* 4. Common Sense Toggles: Soundboard Leveling, Tape Warmth, Continuous Playback */}
+              {/* 4. Common Sense Toggles */}
               <div className="space-y-2 pt-1">
                 {/* Soundboard Gain Normalization */}
                 <div className="flex items-center justify-between p-3 rounded-xl bg-stone-950/40 border border-stone-850">
-                  <div className="space-y-0.5">
-                    <div className="font-medium text-stone-200">
-                      Archive Soundboard Normalization
-                    </div>
-                    <div className="text-[11px] text-stone-400">
-                      Equalizes volume variations between 1960s/70s tapers and modern digital soundboards
-                    </div>
+                  <div className="font-medium text-stone-200">
+                    Volume Normalization
                   </div>
                   <button
                     onClick={() =>
@@ -553,38 +524,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 </div>
 
-                {/* Simulated Tape Warmth */}
-                <div className="flex items-center justify-between p-3 rounded-xl bg-stone-950/40 border border-stone-850">
-                  <div className="space-y-0.5">
-                    <div className="font-medium text-stone-200">Analog Tape Warmth Filter</div>
-                    <div className="text-[11px] text-stone-400">
-                      Subtle harmonic warmth curve tailored for vintage reels and cassette soundboards
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleUpdate({ tapeWarmth: !settings.tapeWarmth })}
-                    className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                      settings.tapeWarmth ? "bg-amber-500" : "bg-stone-800"
-                    }`}
-                  >
-                    <span
-                      className={`block w-4 h-4 rounded-full bg-stone-950 transition-transform ${
-                        settings.tapeWarmth ? "translate-x-6" : "translate-x-1"
-                      }`}
-                    />
-                  </button>
-                </div>
-
                 {/* Low Bandwidth Data Saver */}
                 <div className="flex items-center justify-between p-3 rounded-xl bg-stone-950/40 border border-stone-850">
-                  <div className="space-y-0.5">
-                    <div className="font-medium text-stone-200 flex items-center space-x-1.5">
-                      <Wifi className="w-3.5 h-3.5 text-stone-400" />
-                      <span>Data Saver Mode</span>
-                    </div>
-                    <div className="text-[11px] text-stone-400">
-                      Disables high-res cover art prefetching and streams compressed audio formats
-                    </div>
+                  <div className="font-medium text-stone-200 flex items-center space-x-1.5">
+                    <Wifi className="w-3.5 h-3.5 text-stone-400" />
+                    <span>Data Saver Mode</span>
                   </div>
                   <button
                     onClick={() => handleUpdate({ dataSaver: !settings.dataSaver })}
@@ -602,14 +546,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 {/* Auto-save played tracks to offline cache */}
                 <div className="flex items-center justify-between p-3 rounded-xl bg-stone-950/40 border border-stone-850">
-                  <div className="space-y-0.5">
-                    <div className="font-medium text-stone-200 flex items-center space-x-1.5">
-                      <Database className="w-3.5 h-3.5 text-stone-400" />
-                      <span>Auto-save played tracks</span>
-                    </div>
-                    <div className="text-[11px] text-stone-400">
-                      Pin every played stream to offline cache automatically — played songs stay available offline
-                    </div>
+                  <div className="font-medium text-stone-200 flex items-center space-x-1.5">
+                    <Database className="w-3.5 h-3.5 text-stone-400" />
+                    <span>Auto-save played tracks</span>
                   </div>
                   <button
                     onClick={() => handleUpdate({ autoCachePlayed: !settings.autoCachePlayed })}
@@ -630,12 +569,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="p-3.5 rounded-xl bg-stone-950/40 border border-stone-850 space-y-3">
                 <div className="flex items-center space-x-2">
                   <Sliders className="w-4 h-4 text-amber-400" />
-                  <div>
-                    <h4 className="text-sm font-semibold text-stone-200">Graphic Equalizer</h4>
-                    <p className="text-stone-400 text-[11px]">
-                      10-band studio EQ applied live to playback
-                    </p>
-                  </div>
+                  <h4 className="text-sm font-semibold text-stone-200">Graphic Equalizer</h4>
                 </div>
 
                 {/* Profile chips */}

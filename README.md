@@ -30,7 +30,7 @@ except: `src/services/nativeAudio.ts`, the native wiring in
 `src/context/PlayerContext.tsx`, `package.json` mobile deps, `vite.config.ts`,
 `capacitor.config.ts`, and `android/` stay Android-specific.
 
-## Release ritual (F-Droid relevant)
+## Release ritual
 
 1. Bump `versionCode` (+1) and `versionName` (match the tag) in
    `android/app/build.gradle`.

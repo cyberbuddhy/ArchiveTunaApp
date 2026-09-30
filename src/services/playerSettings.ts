@@ -4,7 +4,6 @@ export interface PlayerSettings {
 
   // Audio Quality & Stream Preference
   audioQuality: "vbr320" | "standard128" | "flac";
-  tapeWarmth: boolean;
   gainNormalization: boolean;
 
   // Playback & Transitions
@@ -51,7 +50,6 @@ export const FACTORY_EQ_PROFILES: EqProfile[] = [
 export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   themeId: "matte-lavender",
   audioQuality: "vbr320",
-  tapeWarmth: false,
   gainNormalization: true,
   defaultPlaybackRate: 1.0,
   crossfadeSeconds: 2,

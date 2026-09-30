@@ -10,8 +10,8 @@ android {
         // F-Droid ritual: bump versionCode (+1) and versionName (match the
         // release tag) on EVERY release. F-Droid only accepts higher vercodes
         // and reads these literals with regex (no dynamic computation).
-        versionCode 9
-        versionName "0.2.0-beta.8"
+        versionCode 10
+        versionName "0.2.0-beta.9"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

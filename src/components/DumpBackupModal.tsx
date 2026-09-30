@@ -128,7 +128,6 @@ export const DumpBackupModal: React.FC<DumpBackupModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-semibold text-stone-100">Library Backup & Restore</h2>
-              <p className="text-xs text-stone-400">Dump your collection to a file and upload it back anytime</p>
             </div>
           </div>
           <button
@@ -151,14 +150,11 @@ export const DumpBackupModal: React.FC<DumpBackupModalProps> = ({
                   <Download className="w-4 h-4 text-amber-400" />
                   <span>Dump Library to File (Export)</span>
                 </h3>
-                <p className="text-xs text-stone-400 mt-0.5">
-                  Downloads a standalone JSON package containing all captured albums, organized tracks, custom notes, ratings, and playlists.
-                </p>
               </div>
               <button
                 id="dump-library-btn"
                 onClick={handleExport}
-                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-medium text-xs rounded-xl transition-all shadow-md flex items-center space-x-2 shrink-0 ml-4"
+                className="h-9 px-4 bg-amber-500 hover:bg-amber-400 text-stone-950 font-medium text-xs rounded-full transition-colors shadow-md flex items-center space-x-2 shrink-0 ml-4 cursor-pointer"
               >
                 <Download className="w-4 h-4" />
                 <span>Dump Library (.json)</span>
@@ -205,9 +201,6 @@ export const DumpBackupModal: React.FC<DumpBackupModalProps> = ({
                 <Upload className="w-4 h-4 text-emerald-400" />
                 <span>Upload File Back to App (Restore)</span>
               </h3>
-              <p className="text-xs text-stone-400 mt-0.5">
-                Upload your previously dumped JSON file to restore your organized music collection, albums, and playlists exactly as you put them.
-              </p>
             </div>
 
             {/* Drag and Drop Zone */}

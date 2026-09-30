@@ -147,6 +147,17 @@ export const SearchView: React.FC<SearchViewProps> = ({
   const [totalResults, setTotalResults] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  // Surprise easter egg: "supriseme" pins a dancing Rick card and auto-plays
+  // the shared track (whenever-you-need-somebody_202601 #1) in the background.
+  const [isSurprise, setIsSurprise] = useState(false);
+  const playSurprise = () => {
+    window.dispatchEvent(
+      new CustomEvent("archive_play_song", {
+        detail: { albumId: "whenever-you-need-somebody_202601", track: 1 },
+      })
+    );
+  };
+
   // Load search history on mount
   useEffect(() => {
     setSearchHistory(getStoredSearchHistory());
@@ -417,6 +428,8 @@ export const SearchView: React.FC<SearchViewProps> = ({
     setCurrentPage(1);
     setIsLoading(true);
     setHasSearched(true);
+    setIsSurprise(/supriseme/i.test(q));
+    if (/supriseme/i.test(q)) playSurprise();
 
     // Trigger intelligent artist detection concurrently (Spotify-like artist identification)
     setIsSearchingArtists(true);
@@ -1149,7 +1162,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
               <Loader2 className="w-6 h-6 animate-spin text-amber-400 mx-auto" />
               <p className="text-xs text-stone-400">Searching master recordings from Archive.org...</p>
             </div>
-          ) : results.length === 0 ? (
+          ) : results.length === 0 && !isSurprise ? (
             <div className="py-16 text-center space-y-3 rounded-2xl bg-stone-900/30 border border-stone-800 p-8">
               <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 mx-auto flex items-center justify-center text-amber-400">
                 <Disc3 className="w-7 h-7" />
@@ -1188,6 +1201,48 @@ export const SearchView: React.FC<SearchViewProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+              {isSurprise && (
+                <div
+                  key="surprise"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Play Never Gonna Give You Up"
+                  title="Never Gonna Give You Up"
+                  onClick={playSurprise}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      playSurprise();
+                    }
+                  }}
+                  className="group bg-stone-900/50 hover:bg-stone-900 border border-amber-500/40 hover:border-amber-400 rounded-2xl p-3 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
+                >
+                  <div className="relative aspect-square rounded-xl overflow-hidden bg-stone-950 border-2 border-amber-400 mb-2.5 shadow-inner surprise-flash">
+                    <img
+                      src="rickroll.gif"
+                      alt="Rick Astley dancing"
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          "https://archive.org/images/notfound.png";
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-0.5">
+                    <h4
+                      className="text-xs font-semibold text-stone-100 group-hover:text-amber-400 transition-colors line-clamp-1"
+                      title="Never Gonna Give You Up"
+                    >
+                      Never Gonna Give You Up
+                    </h4>
+                    <p className="text-[11px] text-stone-400 line-clamp-1">
+                      Rick Astley • 1987
+                    </p>
+                  </div>
+                </div>
+              )}
               {results.map((item) => {
                 const vaultAlbum = vaultAlbums?.find(
                   (a) => a.id === item.identifier || a.identifier === item.identifier

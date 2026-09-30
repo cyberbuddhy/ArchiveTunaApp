@@ -73,7 +73,6 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
               <h2 id="keyboard-shortcuts-title" className="text-lg font-semibold text-stone-100">
                 Keyboard Navigation & Shortcuts
               </h2>
-              <p className="text-xs text-stone-400">Full keyboard accessibility across all views</p>
             </div>
           </div>
           <button
