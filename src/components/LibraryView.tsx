@@ -3,6 +3,7 @@ import {
   Search,
   Grid,
   List,
+  Heart,
   Play,
   Music,
   Plus,
@@ -28,7 +29,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Album, Track, Playlist, TierList, ListenHistoryItem } from "../types";
-import { getStoredHistory } from "../services/storage";
+import { getStoredHistory, getStoredDismissedMixes, saveStoredDismissedMixes } from "../services/storage";
 import { fetchAlbumDetails } from "../services/api";
 import { buildSmartMixes, loadHistoryPlayback, SmartMix } from "../services/insights";
 import { usePlayer } from "../context/PlayerContext";
@@ -68,6 +69,11 @@ interface LibraryViewProps {
   onUpdateTierList?: (updated: TierList) => void;
   onShowToast?: (message: string, type?: "success" | "info") => void;
   onOpenArtistDiscography?: (artist: string) => void;
+  lovedSongIds?: Set<string>;
+  onToggleTrackLove?: (track: Track) => void;
+  likedSongs?: Track[];
+  tierListFocus?: { listId: string; nonce: number } | null;
+  onTierListFocusConsumed?: () => void;
 }
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
@@ -88,6 +94,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onUpdateTierList,
   onShowToast,
   onOpenArtistDiscography,
+  lovedSongIds,
+  onToggleTrackLove,
+  likedSongs = [],
+  tierListFocus,
+  onTierListFocusConsumed,
 }) => {
   const { playTrack, playRandomTracks, addToQueue, playRelated, currentTrack, currentTime, isPlaying } = usePlayer();
 
@@ -259,6 +270,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     setSongMenu(null);
   };
 
+  // Deep-link from the album Rate panel: open the tierlists tab with the
+  // target list selected, then consume so repeat taps still re-fire.
+  // The id latches locally — TierListView mounts after the consume.
+  const [focusedTierListId, setFocusedTierListId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!tierListFocus) return;
+    setFocusedTierListId(tierListFocus.listId);
+    setActiveSubTab("tierlists");
+    onTierListFocusConsumed?.();
+  }, [tierListFocus]);
+
   // Offline Cached Audio state
   const [cachedAudioItems, setCachedAudioItems] = useState<CachedAudioItem[]>([]);
 
@@ -336,12 +358,72 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [editPlaylistText, setEditPlaylistText] = useState("");
 
   // Smart mixes: rebuilt live from history + vault (never stored).
-  // NOTE: declared up here — activePlaylist below reads smartMixes on every render.
+  // NOTE: declared up here - activePlaylist below reads smartMixes on every render.
   const [mixHistory, setMixHistory] = useState<ListenHistoryItem[]>([]);
   useEffect(() => {
     if (activeSubTab === "playlists") setMixHistory(getStoredHistory());
   }, [activeSubTab]);
-  const smartMixes = useMemo(() => buildSmartMixes(mixHistory, albums), [mixHistory, albums]);
+  // Dismissed default mixes (mix id -> track signature). A mix returns on
+  // its own once its track set changes (new qualifying plays).
+  const mixSignature = (m: SmartMix) => m.tracks.map((t) => t.id).join("|");
+  const [dismissedMixes, setDismissedMixes] = useState<Record<string, string>>(() =>
+    getStoredDismissedMixes()
+  );
+  const smartMixes = useMemo(() => {
+    const base = buildSmartMixes(mixHistory, albums);
+    const withLiked =
+      likedSongs.length === 0
+        ? base
+        : [
+            {
+              id: "smart_liked_songs",
+              name: "Liked Songs",
+              description: "Every song you liked, in one place",
+              tracks: likedSongs,
+            },
+            ...base,
+          ];
+    return withLiked.filter((m) => dismissedMixes[m.id] !== mixSignature(m));
+  }, [mixHistory, albums, likedSongs, dismissedMixes]);
+  // Forget dismissals whose content drifted — those mixes qualify again
+  useEffect(() => {
+    const base = buildSmartMixes(mixHistory, albums);
+    const all: SmartMix[] =
+      likedSongs.length === 0
+        ? base
+        : [
+            {
+              id: "smart_liked_songs",
+              name: "Liked Songs",
+              description: "Every song you liked, in one place",
+              tracks: likedSongs,
+            },
+            ...base,
+          ];
+    setDismissedMixes((prev) => {
+      const keys = Object.keys(prev);
+      if (keys.length === 0) return prev;
+      const next = { ...prev };
+      let changed = false;
+      for (const m of all) {
+        if (next[m.id] !== undefined && next[m.id] !== mixSignature(m)) {
+          delete next[m.id];
+          changed = true;
+        }
+      }
+      if (changed) saveStoredDismissedMixes(next);
+      return changed ? next : prev;
+    });
+  }, [mixHistory, albums, likedSongs]);
+  const handleDismissMix = (mix: SmartMix) => {
+    if (!confirm(`Remove "${mix.name}"? It returns when its songs change.`)) return;
+    setDismissedMixes((prev) => {
+      const next = { ...prev, [mix.id]: mixSignature(mix) };
+      saveStoredDismissedMixes(next);
+      return next;
+    });
+    if (onShowToast) onShowToast(`Removed "${mix.name}".`, "info");
+  };
 
   const activeMix = smartMixes.find((m) => m.id === selectedPlaylistId) || null;
   const mixAsPlaylist = (m: SmartMix): Playlist => ({
@@ -379,7 +461,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     return Array.from(tagsSet);
   }, [albums]);
 
-  // Filtered albums based on search (single axis: every vault album shows here)
+  // Filtered albums based on search (liked songs live in the Liked Songs mix)
   const displayedAlbums = useMemo(() => {
     const source = albums;
 
@@ -1299,6 +1381,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           onSelectAlbumForDetail={onSelectAlbum}
           onUpdateAlbum={onUpdateAlbum || (() => {})}
           onShowToast={onShowToast || (() => {})}
+          focusListId={focusedTierListId}
         />
       )}
 
@@ -1336,7 +1419,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 {isCreatingPlaylist && (
                   <form
                     onSubmit={handleCreatePlaylistSubmit}
-                    className="p-3 bg-stone-900 border border-stone-800 rounded-xl space-y-2.5 animate-in fade-in"
+                    className="p-3 bg-stone-900 border border-stone-800 rounded-xl space-y-2.5 animate-ui-fade"
                   >
                     <h4 className="text-xs font-semibold text-stone-200">New Playlist</h4>
                     <input
@@ -1471,17 +1554,30 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         <Share2 className="w-3.5 h-3.5" />
                       </button>
                       {activeIsMix ? (
-                        <button
-                          onClick={() => {
-                            const mix = smartMixes.find((m) => m.id === activePlaylist.id);
-                            if (mix) handleSaveMix(mix);
-                          }}
-                          disabled={activePlaylist.tracks.length === 0}
-                          className="px-3 py-1.5 bg-stone-900 hover:bg-stone-850 disabled:opacity-40 text-stone-200 border border-stone-800 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
-                          title="Save mix as a playlist"
-                        >
-                          Save
-                        </button>
+                        <>
+                          <button
+                            onClick={() => {
+                              const mix = smartMixes.find((m) => m.id === activePlaylist.id);
+                              if (mix) handleSaveMix(mix);
+                            }}
+                            disabled={activePlaylist.tracks.length === 0}
+                            className="px-3 py-1.5 bg-stone-900 hover:bg-stone-850 disabled:opacity-40 text-stone-200 border border-stone-800 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                            title="Save mix as a playlist"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              const mix = smartMixes.find((m) => m.id === activePlaylist.id);
+                              if (mix) handleDismissMix(mix);
+                            }}
+                            className="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-stone-800 transition-colors cursor-pointer"
+                            title={`Remove "${activePlaylist.name}" (returns when its songs change)`}
+                            aria-label={`Remove "${activePlaylist.name}"`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
                       ) : (
                         <button
                           onClick={() => {
@@ -1505,6 +1601,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     <div className="divide-y divide-white/5">
                       {activePlaylist.tracks.map((track, idx) => {
                         const isCurrent = currentTrack?.id === track.id;
+                        const loved = lovedSongIds?.has(track.id) || !!track.isFavorite;
                         return (
                           <React.Fragment key={`${track.id}_${idx}`}>
                           <div
@@ -1534,7 +1631,31 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                             </div>
 
                             <div className="flex items-center gap-1 text-stone-500 shrink-0">
+                              {track.playCount != null && (
+                                <span
+                                  className="text-[10px] tabular-nums text-amber-400/90"
+                                  title={`Played ${track.playCount} time${track.playCount === 1 ? "" : "s"}`}
+                                >
+                                  {track.playCount}×
+                                </span>
+                              )}
                               <span className="w-12 text-right text-[11px] tabular-nums">{formatDuration(track.duration)}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onToggleTrackLove?.(track);
+                                }}
+                                aria-label={loved ? `Unlike ${track.title}` : `Like ${track.title}`}
+                                title={loved ? "Liked" : "Like this song"}
+                                className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                                  loved
+                                    ? "text-rose-500"
+                                    : "text-stone-500 hover:text-rose-400 hover:bg-white/10 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
+                                }`}
+                              >
+                                <Heart className={`w-4 h-4 ${loved ? "fill-rose-500" : ""}`} />
+                              </button>
                               <button
                                 type="button"
                                 onClick={(e) => openSongMenu(e, `pl_${activePlaylist.id}_${track.id}_${idx}`, track, "playlist", idx)}
@@ -1640,6 +1761,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             ) : (
               displayedSongs.map(({ track, album }, idx) => {
                 const isCurrent = currentTrack?.id === track.id;
+                const loved = lovedSongIds?.has(track.id) || !!track.isFavorite;
                 return (
                   <React.Fragment key={`${track.id}_${idx}`}>
                   <div
@@ -1695,6 +1817,22 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       <span className="w-12 text-right text-[11px] tabular-nums text-stone-500">
                         {formatDuration(track.duration)}
                       </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleTrackLove?.(track);
+                        }}
+                        aria-label={loved ? `Unlike ${track.title}` : `Like ${track.title}`}
+                        title={loved ? "Liked" : "Like this song"}
+                        className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                          loved
+                            ? "text-rose-500"
+                            : "text-stone-500 hover:text-rose-400 hover:bg-white/10 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
+                        }`}
+                      >
+                        <Heart className={`w-4 h-4 ${loved ? "fill-rose-500" : ""}`} />
+                      </button>
 
                       {/* Overflow menu + Add to Playlist popup */}
                       <div className="relative">

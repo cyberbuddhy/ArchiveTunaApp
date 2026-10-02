@@ -188,7 +188,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
     >
       <div
         id="artist-discography-modal"
-        className="relative w-full max-w-5xl max-h-[90vh] bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-stone-100"
+        className="relative w-full max-w-5xl max-h-[90vh] bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-stone-100 animate-ui-pop"
         onClick={(e) => e.stopPropagation()}
       >
         {/* TOP HEADER */}

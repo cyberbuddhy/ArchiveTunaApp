@@ -41,6 +41,7 @@ import {
   removeSearchHistoryItem,
   clearStoredSearchHistory,
   getStoredHistory,
+  clearStoredHistory,
 } from "../services/storage";
 import {
   getContinueAlbums,
@@ -376,6 +377,9 @@ export const SearchView: React.FC<SearchViewProps> = ({
     e.stopPropagation();
     clearStoredSearchHistory();
     setSearchHistory([]);
+    // Continue listening is built from listen history — clear it too
+    clearStoredHistory();
+    setHomeHistory([]);
   };
 
   const handleCategorySearch = (categoryQuery: string, targetField: SearchFieldType = "all") => {
@@ -735,7 +739,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
           {isHistoryOpen && (
             <div
               id="search-history-dropdown"
-              className="absolute left-0 right-0 top-full mt-2 bg-stone-900 border border-stone-700/90 rounded-2xl shadow-2xl z-40 overflow-hidden divide-y divide-stone-800/60 animate-in fade-in slide-in-from-top-1 duration-150"
+              className="absolute left-0 right-0 top-full mt-2 bg-stone-900 border border-stone-700/90 rounded-2xl shadow-2xl z-40 overflow-hidden divide-y divide-stone-800/60 animate-ui-fade"
             >
               <div className="px-4 py-2.5 bg-stone-950/90 flex items-center justify-between text-[11px] text-stone-400 font-medium">
                 <span className="flex items-center gap-1.5 text-stone-300">
@@ -791,7 +795,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
           {showSuggestions && !isHistoryOpen && suggestions.length > 0 && (
             <div
               id="search-autocomplete-dropdown"
-              className="absolute left-0 right-0 top-full mt-2 bg-stone-900 border border-stone-700/90 rounded-2xl shadow-2xl z-40 overflow-hidden divide-y divide-stone-800/60 animate-in fade-in slide-in-from-top-1 duration-150"
+              className="absolute left-0 right-0 top-full mt-2 bg-stone-900 border border-stone-700/90 rounded-2xl shadow-2xl z-40 overflow-hidden divide-y divide-stone-800/60 animate-ui-fade"
             >
               <div className="px-4 py-2 bg-stone-950/90 flex items-center justify-between text-[11px] text-stone-400 font-medium">
                 <span className="flex items-center gap-1.5">
@@ -857,7 +861,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
         {/* EXPANDABLE ADVANCED SEARCH SECTION: Target Pills + "Filters & Sort" */}
         {isAdvancedOpen && (
-          <div className="bg-stone-900/80 border border-stone-800 p-3 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="bg-stone-900/80 border border-stone-800 p-3 rounded-2xl space-y-3 animate-ui-fade">
             <div className="flex flex-wrap items-center justify-between gap-2.5">
               {/* Target: All fields, Artist/Band, Album Title, Genre/Subject */}
               <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0">

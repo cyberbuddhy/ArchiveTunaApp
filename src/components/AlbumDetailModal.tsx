@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   X,
   Play,
+  Heart,
   Tag,
   FileText,
   Clock,
@@ -45,6 +46,9 @@ interface AlbumDetailModalProps {
   onCreateTierList?: (name: string, description?: string) => TierList | void;
   vaultAction?: { label: string; onAction: () => void };
   isInVault?: boolean;
+  lovedSongIds?: Set<string>;
+  onToggleTrackLove?: (track: Track) => void;
+  onOpenTierList?: (tierListId: string) => void;
 }
 
 export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
@@ -62,6 +66,9 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
   onCreateTierList,
   vaultAction,
   isInVault,
+  lovedSongIds,
+  onToggleTrackLove,
+  onOpenTierList,
 }) => {
   const { playTrack, playAlbum, addToQueue, playRelated, currentTrack, currentTime, isPlaying } = usePlayer();
   const [activeTab, setActiveTab] = useState<"tracks" | "notes">("tracks");
@@ -69,6 +76,31 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
   const [tagInput, setTagInput] = useState("");
   const [playlistMenuTrackId, setPlaylistMenuTrackId] = useState<string | null>(null);
   const [trackMenuId, setTrackMenuId] = useState<string | null>(null);
+  // Viewport-anchored position so the menu floats above the modal scroll
+  // container instead of getting clipped by it (single-track albums).
+  const [trackMenuPos, setTrackMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const openTrackMenu = (e: React.MouseEvent, trackId: string) => {
+    e.stopPropagation();
+    if (trackMenuId === trackId) {
+      setTrackMenuId(null);
+      setTrackMenuPos(null);
+      return;
+    }
+    const r = e.currentTarget.getBoundingClientRect();
+    const w = 208;
+    const estH = 280;
+    // Slide up just enough to fit — never detach far above the button
+    const top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 8 - estH));
+    setTrackMenuId(trackId);
+    setTrackMenuPos({
+      top,
+      left: Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)),
+    });
+  };
+  const closeTrackMenu = () => {
+    setTrackMenuId(null);
+    setTrackMenuPos(null);
+  };
   const [albumMenuOpen, setAlbumMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [newSingleName, setNewSingleName] = useState("");
@@ -253,6 +285,35 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
     onUpdateAlbum(updated);
   };
 
+  // Send this album to a tier list as unrated, then jump there so the
+  // verdict happens in the list (unrated tray below F).
+  const handleOpenListForRating = (tl: TierList) => {
+    const existingItem = tl.items.find((it) => it.albumId === album.id);
+    if (!existingItem && onUpdateTierList) {
+      const newItem: TierItem = {
+        albumId: album.id,
+        albumTitle: album.title,
+        artist: album.artist,
+        coverUrl: album.coverUrl,
+        year: album.year,
+        addedAt: new Date().toISOString(),
+      };
+      onUpdateTierList({
+        ...tl,
+        items: [...tl.items, newItem],
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    setIsRateTierListOpen(false);
+    setAlbumMenuOpen(false);
+    onOpenTierList?.(tl.id);
+  };
+
+  const handleFavorite = () => {
+    const updated = { ...album, isFavorite: !album.isFavorite };
+    onUpdateAlbum(updated);
+  };
+
   const handleAddAllToPlaylist = (playlistId: string, playlistName: string) => {
     if (!album.tracks || album.tracks.length === 0) return;
     album.tracks.forEach((track) => {
@@ -317,7 +378,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
     <div role="dialog" aria-modal="true" aria-label={`Details for ${album?.title || "album"}`} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overscroll-contain" onWheel={(e) => e.stopPropagation()} onClick={onClose}>
       <div
         id="album-detail-modal"
-        className="w-full max-w-3xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] overscroll-contain"
+        className="w-full max-w-3xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] overscroll-contain animate-ui-pop"
         onClick={(e) => e.stopPropagation()}
         onWheel={handlePanelWheel}
       >
@@ -391,7 +452,19 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                 <Play className="w-4 h-4 fill-stone-950" />
                 <span className="tabular-nums">Play All Tracks ({album.tracks?.length || 0})</span>
               </button>
-              {/* Vault membership — the only save state (taste lives in tiers) */}
+              {/* Rating & Favorite Controls */}
+                {/* Heart / Liked Button */}
+                <button
+                  id="detail-heart-btn"
+                  onClick={handleFavorite}
+                  className="w-9 h-9 rounded-full grid place-items-center border border-white/10 text-stone-400 hover:text-rose-400 hover:border-rose-500/30 hover:bg-white/5 transition-colors cursor-pointer"
+                  title={album.isFavorite ? "Remove from Liked (Vault)" : "Save as Liked in Vault"}
+                  aria-label={album.isFavorite ? "Remove from Liked" : "Like album"}
+                  aria-pressed={album.isFavorite}
+                >
+                  <Heart className={`w-4 h-4 ${album.isFavorite ? "fill-rose-500 text-rose-500" : ""}`} />
+                </button>
+
                 {/* Add to Vault / In Vault — tap toggles instantly (no confirm) */}
                 {isInVault ? (
                   <button
@@ -424,7 +497,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                 {/* Rate / Tier List panel (opened from the ⋮ menu below) */}
                 <div className="relative">
                   {isRateTierListOpen && (
-                    <div className="absolute left-0 top-full mt-1.5 w-72 sm:w-80 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-3 z-50 text-xs space-y-3 animate-in fade-in">
+                    <div className="absolute left-0 top-full mt-1.5 w-72 sm:w-80 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-3 z-50 text-xs space-y-3 animate-ui-fade">
                       <div className="flex items-center justify-between pb-1 border-b border-stone-850">
                         <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500">
                           Rate & Tier Lists
@@ -510,24 +583,40 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                                   key={tl.id}
                                   className="p-2 rounded-lg bg-stone-900/70 hover:bg-stone-900 border border-stone-850 flex items-center justify-between gap-2"
                                 >
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-xs font-semibold text-stone-200 truncate">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenListForRating(tl)}
+                                    title={existingItem ? `Open "${tl.name}"` : `Send to "${tl.name}" unrated and open it`}
+                                    className="min-w-0 flex-1 text-left cursor-pointer"
+                                  >
+                                    <p className="text-xs font-semibold text-stone-200 truncate hover:text-amber-300 transition-colors">
                                       {tl.name}
                                     </p>
                                     <p className="text-[10px] text-stone-500">
                                       {tl.items.length} album{tl.items.length === 1 ? "" : "s"}
+                                      {existingItem
+                                        ? existingItem.rank
+                                          ? ` • rated ${existingItem.rank}`
+                                          : " • waiting in Unrated"
+                                        : " • rate it →"}
                                     </p>
-                                  </div>
+                                  </button>
 
                                   {existingItem ? (
                                     <div className="flex items-center space-x-1.5 shrink-0">
-                                      <span
-                                        className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
-                                          TIER_CONFIG[existingItem.rank].bgClass
-                                        } text-black`}
-                                      >
-                                        {existingItem.rank}
-                                      </span>
+                                      {existingItem.rank ? (
+                                        <span
+                                          className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                                            TIER_CONFIG[existingItem.rank].bgClass
+                                          } text-black`}
+                                        >
+                                          {existingItem.rank}
+                                        </span>
+                                      ) : (
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold border border-dashed border-stone-600 text-stone-400">
+                                          ?
+                                        </span>
+                                      )}
                                       <button
                                         onClick={() => {
                                           if (onUpdateTierList) {
@@ -778,7 +867,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                   )}
 
                   {isAddAllPlaylistOpen && (
-                    <div className="absolute left-0 top-full mt-1.5 w-60 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-2 z-50 text-xs space-y-1.5 animate-in fade-in">
+                    <div className="absolute left-0 top-full mt-1.5 w-60 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-2 z-50 text-xs space-y-1.5 animate-ui-fade">
                       <div className="flex items-center justify-between pb-1 border-b border-stone-850">
                         <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500">
                           Add All Songs To:
@@ -944,6 +1033,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
               ) : (
                 album.tracks.map((track, idx) => {
                   const isCurrent = currentTrack?.id === track.id;
+                  const loved = lovedSongIds?.has(track.id) || !!track.isFavorite;
 
                   return (
                     <React.Fragment key={track.id || idx}>
@@ -983,21 +1073,38 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                         <span className="hidden sm:inline w-12 text-right text-[10px] uppercase tracking-wide text-stone-600">{track.format || "MP3"}</span>
                         <span className="w-12 text-right text-[11px] tabular-nums text-stone-500">{formatDuration(track.duration)}</span>
 
+                        <button
+                          type="button"
+                          onClick={() => onToggleTrackLove?.(track)}
+                          aria-label={loved ? `Unlike ${track.title}` : `Like ${track.title}`}
+                          title={loved ? "Liked" : "Like this song"}
+                          className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                            loved
+                              ? "text-rose-500"
+                              : "text-stone-500 hover:text-rose-400 hover:bg-white/10 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
+                          }`}
+                        >
+                          <Heart className={`w-4 h-4 ${loved ? "fill-rose-500" : ""}`} />
+                        </button>
+
                         {/* Overflow menu: pin, download, link, lyrics, playlist */}
                         <div className="relative">
                           <button
                             type="button"
-                            onClick={() => setTrackMenuId(trackMenuId === track.id ? null : track.id)}
+                            onClick={(e) => openTrackMenu(e, track.id)}
                             className="p-1.5 rounded-full text-stone-500 hover:text-stone-100 hover:bg-white/10 transition-colors cursor-pointer sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
                             title="More options"
                             aria-label="More options"
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
-                          {trackMenuId === track.id && (
+                          {trackMenuId === track.id && trackMenuPos && (
                             <>
-                              <div className="fixed inset-0 z-30" onClick={() => setTrackMenuId(null)} />
-                      <div className="absolute right-0 top-full mt-1 w-52 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 z-40 space-y-0.5">
+                              <div className="fixed inset-0 z-30" onClick={closeTrackMenu} />
+                      <div
+                        className="fixed w-52 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 z-40 space-y-0.5"
+                        style={{ top: trackMenuPos.top, left: trackMenuPos.left }}
+                      >
                                 <button
                                   type="button"
                                   onClick={() => { handleToggleTrackPin(track); setTrackMenuId(null); }}

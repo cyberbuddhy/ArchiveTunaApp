@@ -1,4 +1,4 @@
-import { Album, Playlist, ListenHistoryItem, LibraryDump, Track, TierList } from "../types";
+import { Album, Playlist, ListenHistoryItem, LibraryDump, Track, TierList, LovedTrackEntry } from "../types";
 
 const STORAGE_KEYS = {
   ALBUMS: "archive_vault_albums_v2",
@@ -7,7 +7,51 @@ const STORAGE_KEYS = {
   HISTORY: "archive_vault_history_v2",
   CLEANSED_FLAG: "archive_vault_cleansed_v2",
   SEARCH_HISTORY: "archive_search_history_v1",
+  LOVED_TRACKS: "archive_loved_tracks_v1",
+  DISMISSED_MIXES: "archive_dismissed_mixes_v1",
 };
+
+// Dismissed smart mixes (mix id -> track signature at dismissal time).
+// A mix returns automatically once its track set changes again.
+export function getStoredDismissedMixes(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DISMISSED_MIXES);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (err) {
+    console.error("Error reading dismissed mixes", err);
+    return {};
+  }
+}
+
+export function saveStoredDismissedMixes(dismissed: Record<string, string>): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.DISMISSED_MIXES, JSON.stringify(dismissed));
+  } catch (err) {
+    console.error("Error saving dismissed mixes", err);
+  }
+}
+// Album-level loves resolve through the vault instead — see App toggle logic.
+export function getStoredLovedTracks(): Record<string, LovedTrackEntry> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.LOVED_TRACKS);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (err) {
+    console.error("Error reading loved tracks", err);
+    return {};
+  }
+}
+
+export function saveStoredLovedTracks(loved: Record<string, LovedTrackEntry>): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.LOVED_TRACKS, JSON.stringify(loved));
+  } catch (err) {
+    console.error("Error saving loved tracks", err);
+  }
+}
 
 export function getStoredAlbums(): Album[] {
   try {
@@ -93,6 +137,14 @@ export function getStoredHistory(): ListenHistoryItem[] {
   } catch (err) {
     console.error("Error reading history", err);
     return [];
+  }
+}
+
+export function clearStoredHistory(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.HISTORY);
+  } catch (err) {
+    console.error("Error clearing history", err);
   }
 }
 

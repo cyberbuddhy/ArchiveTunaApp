@@ -117,7 +117,7 @@ export const DumpBackupModal: React.FC<DumpBackupModalProps> = ({
     <div role="dialog" aria-modal="true" aria-label="Library backup and restore" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
       <div
         id="backup-dump-modal"
-        className="w-full max-w-2xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-2xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-ui-pop"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

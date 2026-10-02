@@ -76,7 +76,7 @@ export const TierBadgePicker: React.FC<TierBadgePickerProps> = ({
       {isOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute left-0 bottom-full mb-1.5 sm:bottom-auto sm:top-full sm:mt-1.5 z-50 bg-stone-950 border border-stone-800 rounded-xl p-2 shadow-2xl flex items-center space-x-1.5 animate-in fade-in zoom-in-95 duration-100"
+          className="absolute left-0 bottom-full mb-1.5 sm:bottom-auto sm:top-full sm:mt-1.5 z-50 bg-stone-950 border border-stone-800 rounded-xl p-2 shadow-2xl flex items-center space-x-1.5 animate-ui-pop"
         >
           <span className="text-[10px] uppercase font-bold tracking-wider text-stone-500 pl-0.5 pr-1 select-none">
             Tier:

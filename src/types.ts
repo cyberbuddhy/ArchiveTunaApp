@@ -12,14 +12,27 @@ export interface Track {
   filename?: string;
   size?: number;
   userRating?: number; // 1-5
+  playCount?: number; // listen-history plays, attached by smart mixes only
+  isFavorite?: boolean; // loved song (explicit or via loved album)
   notes?: string;
+}
+
+// One loved-song entry: explicit toggle and/or contributing loved albums.
+// A track counts as loved while NOT muted AND (explicit OR >=1 album).
+// Unliking a derived love mutes it so it stays out of Liked Songs.
+export interface LovedTrackEntry {
+  track: Track;
+  explicit: boolean;
+  albumIds: string[];
+  muted: boolean;
 }
 
 export type TierRank = "S" | "A" | "B" | "C" | "D" | "F";
 
 export interface TierItem {
   albumId: string;
-  rank: TierRank;
+  // Absent = waiting in the unrated tray below F, not ranked yet
+  rank?: TierRank;
   albumTitle: string;
   artist: string;
   coverUrl?: string;

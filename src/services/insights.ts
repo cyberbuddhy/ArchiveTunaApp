@@ -151,22 +151,25 @@ function vaultTrackIndex(albums: Album[]): Map<string, Track> {
 
 /**
  * Virtual mixes, rebuilt live on every render — never stored.
- * All sources are local: history counts, vault recency, top-tier ranks.
+ * All sources are local: history counts, vault recency, liked flags.
  */
 export function buildSmartMixes(history: ListenHistoryItem[], albums: Album[]): SmartMix[] {
   const byId = vaultTrackIndex(albums);
   const mixes: SmartMix[] = [];
 
-  // Most played: rank vault tracks by history count
+  // Most played: rank vault tracks by history count (top 50, counts attached)
   const plays = new Map<string, number>();
   for (const h of history) {
     if (h && h.trackId) plays.set(h.trackId, (plays.get(h.trackId) || 0) + 1);
   }
   const mostPlayed = Array.from(plays.entries())
     .sort((a, b) => b[1] - a[1])
-    .map(([id]) => byId.get(id))
-    .filter((t): t is Track => !!t && !!t.streamUrl)
-    .slice(0, 25);
+    .map(([id, count]): Track | undefined => {
+      const t = byId.get(id);
+      return t && t.streamUrl ? { ...t, playCount: count } : undefined;
+    })
+    .filter((t): t is Track => !!t)
+    .slice(0, 50);
   if (mostPlayed.length > 0) {
     mixes.push({
       id: "smart_most_played",
@@ -191,8 +194,7 @@ export function buildSmartMixes(history: ListenHistoryItem[], albums: Album[]): 
     });
   }
 
-  // Forgotten favorites: top-tier (S/A) albums untouched for 30+ days.
-  // Taste comes from tier ranks now — the legacy like flag is retired.
+  // Forgotten favorites: liked albums untouched for 30+ days
   const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
   const recentIds = new Set(
     history
@@ -200,7 +202,7 @@ export function buildSmartMixes(history: ListenHistoryItem[], albums: Album[]): 
       .map((h) => h.trackId)
   );
   const forgotten = albums
-    .filter((a) => a.tier === "S" || a.tier === "A")
+    .filter((a) => a.isFavorite)
     .flatMap((a) => a.tracks || [])
     .filter((t) => t && t.streamUrl && !recentIds.has(t.id))
     .slice(0, 25);
@@ -208,7 +210,7 @@ export function buildSmartMixes(history: ListenHistoryItem[], albums: Album[]): 
     mixes.push({
       id: "smart_forgotten",
       name: "Forgotten favorites",
-      description: "Top-tier albums you haven't touched in 30 days",
+      description: "Liked albums you haven't touched in 30 days",
       tracks: forgotten,
     });
   }

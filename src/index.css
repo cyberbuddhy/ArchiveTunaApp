@@ -262,6 +262,30 @@ body {
 
 /* Custom dual-accent gradient utilities (used via theme variables) */
 
+/* Fast open motion: panels pop (160ms), menus fade (120ms). Snappy only —
+   the global reduced-motion rule already disables all of this on request. */
+@keyframes ui-pop-in {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ui-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ui-rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-ui-pop {
+  animation: ui-pop-in 0.16s ease-out;
+}
+.animate-ui-fade {
+  animation: ui-fade-in 0.12s ease-out;
+}
+.animate-ui-rise {
+  animation: ui-rise-in 0.18s ease-out;
+}
+
 /* Surprise easter egg: flashing rainbow border around the GIF cover */
 @keyframes surprise-border-flash {
   0%, 100% { border-color: #FBBF24; }

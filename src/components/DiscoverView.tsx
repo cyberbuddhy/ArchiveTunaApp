@@ -292,7 +292,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
         className="p-4 bg-stone-900/90 border border-stone-800 rounded-2xl shadow-sm space-y-3.5"
       >
             {/* Top Toolbar: genre search (left) + collapse toggle */}
-            <div className="flex items-center gap-2 border-b border-stone-800 pb-3">
+            <div className="flex items-center gap-2 pb-1">
               {/* Fast genre search input */}
               <div className="relative flex-1 sm:flex-none sm:w-64">
                 <Search className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-1/2 -translate-y-1/2" />

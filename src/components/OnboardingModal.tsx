@@ -40,7 +40,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onDone }) => {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-      <div className="w-full max-w-sm bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl p-6 text-center space-y-4">
+      <div className="w-full max-w-sm bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl p-6 text-center space-y-4 animate-ui-pop">
         <div className="flex items-center justify-between">
           <div className="flex space-x-1.5">
             {SLIDES.map((_, d) => (

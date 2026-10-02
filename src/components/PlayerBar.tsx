@@ -13,8 +13,7 @@ import {
   ChevronUp,
   ChevronDown,
   Trash2,
-  Plus,
-  Check,
+  Heart,
   MoreVertical,
   Radio,
   Mic,
@@ -44,8 +43,10 @@ import { getStoredPlayerSettings, savePlayerSettings } from "../services/playerS
 interface PlayerBarProps {
   onSelectAlbumForDetail?: (album: Album) => void;
   onOpenArtistDiscography?: (artistName: string) => void;
-  onToggleSaveAlbum?: (album: Album) => void;
-  isAlbumSaved?: (albumId: string) => boolean;
+  onToggleFavoriteAlbum?: (album: Album) => void;
+  isAlbumFavorite?: (albumId: string) => boolean;
+  lovedSongIds?: Set<string>;
+  onToggleTrackLove?: (track: Track) => void;
 }
 
 const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 2.0];
@@ -53,8 +54,10 @@ const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 2.0];
 export const PlayerBar: React.FC<PlayerBarProps> = ({
   onSelectAlbumForDetail,
   onOpenArtistDiscography,
-  onToggleSaveAlbum,
-  isAlbumSaved,
+  onToggleFavoriteAlbum,
+  isAlbumFavorite,
+  lovedSongIds,
+  onToggleTrackLove,
 }) => {
   const {
     currentTrack,
@@ -251,7 +254,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   if (!currentTrack) return null;
 
   const activeAlbumId = currentAlbum?.id || currentTrack.albumId;
-  const isSaved = activeAlbumId ? isAlbumSaved?.(activeAlbumId) : false;
+  const isFav = activeAlbumId ? isAlbumFavorite?.(activeAlbumId) : false;
 
   const formatTimeLabel = (secs: number) => formatTime(secs, "0:00");
 
@@ -283,11 +286,11 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
     }
   };
 
-  const handleSaveClick = (e: React.MouseEvent) => {
+  const handleHeartClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!onToggleSaveAlbum) return;
+    if (!onToggleFavoriteAlbum) return;
     if (currentAlbum) {
-      onToggleSaveAlbum(currentAlbum);
+      onToggleFavoriteAlbum(currentAlbum);
     } else if (currentTrack) {
       const fallbackAlbum: Album = {
         id: currentTrack.albumId || `arch_${Date.now()}`,
@@ -299,8 +302,9 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
         capturedAt: new Date().toISOString(),
         source: "Archive.org",
         tracks: [currentTrack],
+        isFavorite: true,
       };
-      onToggleSaveAlbum(fallbackAlbum);
+      onToggleFavoriteAlbum(fallbackAlbum);
     }
   };
 
@@ -469,7 +473,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           id="spotify-mobile-fullscreen-player"
           onTouchStart={handleFullPlayerTouchStart}
           onTouchEnd={handleFullPlayerTouchEnd}
-          className="fixed inset-0 z-50 bg-stone-950 text-stone-100 flex flex-col justify-between p-5 pb-8 sm:hidden select-none animate-in slide-in-from-bottom duration-200 touch-pan-y"
+          className="fixed inset-0 z-50 bg-stone-950 text-stone-100 flex flex-col justify-between p-5 pb-8 sm:hidden select-none animate-ui-rise touch-pan-y"
         >
           {/* Subtle swipe-down handle */}
           <div className="w-10 h-1 rounded-full bg-stone-700/80 mx-auto -mt-1 mb-1 cursor-grab shrink-0" />
@@ -494,13 +498,13 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             </div>
 
             <button
-              onClick={handleSaveClick}
+              onClick={handleHeartClick}
               className={`p-2 rounded-full cursor-pointer transition-colors ${
-                isSaved ? "text-emerald-400" : "text-stone-400 hover:text-stone-200"
+                isFav ? "text-rose-500" : "text-stone-400 hover:text-stone-200"
               }`}
-              title={isSaved ? "In Vault" : "Save to Vault"}
+              title={isFav ? "Liked" : "Like"}
             >
-              {isSaved ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+              <Heart className={`w-5 h-5 ${isFav ? "fill-rose-500" : ""}`} />
             </button>
           </div>
 
@@ -797,13 +801,13 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             </button>
 
             <button
-              onClick={handleSaveClick}
+              onClick={handleHeartClick}
               className={`p-2 transition-colors cursor-pointer ${
-                isSaved ? "text-emerald-400" : "text-stone-400 hover:text-stone-200"
+                isFav ? "text-rose-500" : "text-stone-400 hover:text-stone-200"
               }`}
-              title={isSaved ? "In Vault" : "Save to Vault"}
+              title="Like"
             >
-              {isSaved ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              <Heart className={`w-4 h-4 ${isFav ? "fill-rose-500" : ""}`} />
             </button>
 
             <button
@@ -833,7 +837,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           id="spotify-mobile-queue-sheet"
           onTouchStart={handleQueueTouchStart}
           onTouchEnd={handleQueueTouchEnd}
-          className="sm:hidden fixed inset-0 z-[60] bg-stone-950/98 backdrop-blur-2xl flex flex-col justify-between select-none animate-in slide-in-from-bottom duration-200 touch-pan-y"
+          className="sm:hidden fixed inset-0 z-[60] bg-stone-950/98 backdrop-blur-2xl flex flex-col justify-between select-none animate-ui-rise touch-pan-y"
         >
           {/* Drag handle to swipe down & close */}
           <div
@@ -911,6 +915,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               (queue || []).map((track, i) => {
                 if (!track) return null;
                 const isCurrent = i === queueIndex;
+                const loved = lovedSongIds?.has(track.id) || !!track.isFavorite;
                 return (
                   <React.Fragment key={`mobile_q_${track.id || i}_${i}`}>
                   <div
@@ -943,6 +948,22 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                       <span className="w-12 text-right text-[11px] tabular-nums text-stone-500">
                         {formatTimeLabel(track.duration)}
                       </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleTrackLove?.(track);
+                        }}
+                        aria-label={loved ? `Unlike ${track.title}` : `Like ${track.title}`}
+                        title={loved ? "Liked" : "Like this song"}
+                        className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                          loved
+                            ? "text-rose-500"
+                            : "text-stone-500 hover:text-rose-400 hover:bg-white/10"
+                        }`}
+                      >
+                        <Heart className={`w-4 h-4 ${loved ? "fill-rose-500" : ""}`} />
+                      </button>
                       <button
                         type="button"
                         onClick={(e) => openQueueMenu(e, `mobile_q_${i}`, i, track)}
@@ -988,7 +1009,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
         {showQueue && (
           <div
             id="player-queue-drawer"
-            className="max-h-80 overflow-y-auto border-b border-stone-800 bg-stone-950/95 backdrop-blur-2xl p-4 divide-y divide-stone-850"
+            className="max-h-80 overflow-y-auto border-b border-stone-800 bg-stone-950/95 backdrop-blur-2xl p-4 divide-y divide-stone-850 animate-ui-fade"
           >
             <div className="flex items-center justify-between pb-3">
               <div className="flex items-center space-x-2.5">
@@ -1020,6 +1041,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               {(queue || []).map((track, i) => {
                 if (!track) return null;
                 const isCurrent = i === queueIndex;
+                const loved = lovedSongIds?.has(track.id) || !!track.isFavorite;
                 return (
                   <React.Fragment key={`desk_q_${track.id || i}_${i}`}>
                   <div
@@ -1052,6 +1074,22 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                       <span className="w-12 text-right text-[11px] tabular-nums text-stone-500">
                         {formatTimeLabel(track.duration)}
                       </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleTrackLove?.(track);
+                        }}
+                        aria-label={loved ? `Unlike ${track.title}` : `Like ${track.title}`}
+                        title={loved ? "Liked" : "Like this song"}
+                        className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                          loved
+                            ? "text-rose-500"
+                            : "text-stone-500 hover:text-rose-400 hover:bg-white/10 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
+                        }`}
+                      >
+                        <Heart className={`w-4 h-4 ${loved ? "fill-rose-500" : ""}`} />
+                      </button>
                       <button
                         type="button"
                         onClick={(e) => openQueueMenu(e, `desk_q_${i}`, i, track)}
@@ -1176,7 +1214,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               </div>
             </div>
 
-            {/* Quick Actions: Vault Save, Offline Pin & Download */}
+            {/* Quick Actions: Favorite, Offline Pin & Download */}
             <div className="flex items-center space-x-1 shrink-0">
               {/* Local-First Offline Cache Pin Toggle */}
               <button
@@ -1207,17 +1245,17 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               </button>
 
               <button
-                id="player-save-btn"
+                id="player-heart-btn"
                 type="button"
-                onClick={handleSaveClick}
+                onClick={handleHeartClick}
                 className={`p-1.5 rounded-full transition-colors cursor-pointer ${
-                  isSaved
-                    ? "text-emerald-400 hover:text-emerald-300 bg-emerald-500/10"
-                    : "text-stone-400 hover:text-emerald-400 hover:bg-white/10"
+                  isFav
+                    ? "text-rose-500 hover:text-rose-400 bg-rose-500/10"
+                    : "text-stone-400 hover:text-rose-400 hover:bg-white/10"
                 }`}
-                title={isSaved ? "In your Vault" : "Save album to Vault"}
+                title={isFav ? "Saved as Liked in Vault" : "Like album & save to Vault"}
               >
-                {isSaved ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                <Heart className={`w-4 h-4 ${isFav ? "fill-rose-500" : ""}`} />
               </button>
 
               {activeAlbumId && (

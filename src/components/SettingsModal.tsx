@@ -238,13 +238,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Vault and player settings"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-ui-fade"
       onClick={onClose}
     >
       <div
         id="settings-modal-card"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-2xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-ui-pop"
       >
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-850 bg-stone-900/90">
@@ -312,7 +312,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Modal Content Body */}
-        <div className="p-5 overflow-y-auto space-y-6 flex-1 text-xs">
+        <div className="p-5 overflow-y-auto overscroll-contain flex-1 min-h-[430px] text-xs">
           {/* TAB 1: Palette & Atmosphere */}
           {activeTab === "palette" && (
             <div className="space-y-3">

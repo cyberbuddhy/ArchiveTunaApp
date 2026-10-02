@@ -56,11 +56,11 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="keyboard-shortcuts-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-ui-fade"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-ui-pop"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

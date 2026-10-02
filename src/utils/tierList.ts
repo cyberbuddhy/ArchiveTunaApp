@@ -94,7 +94,7 @@ export function formatTierListAsText(
   };
 
   items.forEach((item) => {
-    if (grouped[item.rank]) {
+    if (item.rank && grouped[item.rank]) {
       grouped[item.rank].push(item);
     }
   });
@@ -119,6 +119,14 @@ export function formatTierListAsText(
       }
       out += `\n`;
     });
+    const unrated = items.filter((item) => !item.rank);
+    if (unrated.length > 0) {
+      out += `[UNRATED] (${unrated.length})\n`;
+      unrated.forEach((item, idx) => {
+        out += `  ${idx + 1}. ${item.albumTitle} - ${item.artist}${item.year ? ` (${item.year})` : ""}\n`;
+      });
+      out += `\n`;
+    }
     return out.trim();
   }
 
@@ -136,6 +144,14 @@ export function formatTierListAsText(
       md += `\n`;
     }
   });
+  const unratedMd = items.filter((item) => !item.rank);
+  if (unratedMd.length > 0) {
+    md += `## Unrated (${unratedMd.length})\n`;
+    unratedMd.forEach((item) => {
+      md += `- **${item.albumTitle}** — ${item.artist}${item.year ? ` *(${item.year})*` : ""}\n`;
+    });
+    md += `\n`;
+  }
   return md.trim();
 }
 
@@ -171,7 +187,7 @@ export async function exportTierListAsImage(
   };
 
   items.forEach((item) => {
-    if (grouped[item.rank]) {
+    if (item.rank && grouped[item.rank]) {
       grouped[item.rank].push(item);
     }
   });
@@ -253,15 +269,30 @@ export async function exportTierListAsImage(
         ctx.fillStyle = "#292524";
         ctx.fillRect(cardX, cardY, itemWidth, cardH);
 
-        // Try to draw cover image if possible, else fallback tile
+        // Try to draw cover image if possible, else fallback tile.
+        // archive.org image hosts often omit CORS headers (canvas-tainting),
+        // so retry through a public image proxy before giving up.
         let imageDrawn = false;
         if (item.coverUrl) {
-          try {
-            const img = await loadImageAsync(item.coverUrl);
-            ctx.drawImage(img, cardX, cardY, cardH, cardH);
-            imageDrawn = true;
-          } catch (e) {
-            imageDrawn = false;
+          const candidates = [item.coverUrl];
+          const proxied = (() => {
+            try {
+              const parsed = new URL(item.coverUrl as string);
+              return `https://images.weserv.nl/?url=${parsed.host}${parsed.pathname}`;
+            } catch {
+              return null;
+            }
+          })();
+          if (proxied) candidates.push(proxied);
+          for (const src of candidates) {
+            try {
+              const img = await loadImageAsync(src);
+              ctx.drawImage(img, cardX, cardY, cardH, cardH);
+              imageDrawn = true;
+              break;
+            } catch (e) {
+              imageDrawn = false;
+            }
           }
         }
 

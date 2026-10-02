@@ -24,8 +24,10 @@ import {
   getStoredTierLists,
   saveStoredTierLists,
   getStoredHistory,
+  getStoredLovedTracks,
+  saveStoredLovedTracks,
 } from "./services/storage";
-import { Album, Playlist, Track, ListenHistoryItem, TierList } from "./types";
+import { Album, Playlist, Track, ListenHistoryItem, TierList, LovedTrackEntry } from "./types";
 import { CheckCircle2, Heart } from "lucide-react";
 import { ArchiveLogo } from "./components/ArchiveLogo";
 import { THEMES, getStoredThemeId, saveThemeId, applyThemeToDOM } from "./services/themes";
@@ -62,6 +64,41 @@ export default function App() {
   const [history, setHistory] = useState<ListenHistoryItem[]>([]);
   const [searchResetKey, setSearchResetKey] = useState<number>(0);
 
+  // Loved songs: explicit track toggles plus album-level contributions.
+  // A track counts as loved while explicit OR any loved album contributes it.
+  const [lovedTracks, setLovedTracks] = useState<Record<string, LovedTrackEntry>>({});
+  const isEntryLoved = (e: LovedTrackEntry) => !e.muted && (e.explicit || e.albumIds.length > 0);
+  const lovedSongIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const [id, entry] of Object.entries(lovedTracks)) {
+      if (isEntryLoved(entry)) ids.add(id);
+    }
+    for (const a of albums) {
+      if (a.isFavorite) {
+        for (const t of a.tracks || []) ids.add(t.id);
+      }
+    }
+    return ids;
+  }, [lovedTracks, albums]);
+  const likedSongs = useMemo(() => {
+    const out: Track[] = [];
+    const seen = new Set<string>();
+    for (const a of albums) {
+      if (!a.isFavorite) continue;
+      for (const t of a.tracks || []) {
+        if (seen.has(t.id)) continue;
+        seen.add(t.id);
+        out.push({ ...t, isFavorite: true });
+      }
+    }
+    for (const [id, entry] of Object.entries(lovedTracks)) {
+      if (!isEntryLoved(entry) || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ ...entry.track, isFavorite: true });
+    }
+    return out;
+  }, [lovedTracks, albums]);
+
   // Theme & Palette State
   const [themeId, setThemeId] = useState<string>(() => getStoredThemeId());
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -87,6 +124,16 @@ export default function App() {
   const [discographyArtist, setDiscographyArtist] = useState<string | null>(null);
   const [externalSearchQuery, setExternalSearchQuery] = useState<{ query: string; field?: string } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(() => !hasSeenOnboarding());
+
+  // Deep-link into a tier list (e.g. from the album Rate panel): Vault tab,
+  // tierlists subtab, list selected. Consumed once by LibraryView.
+  const [tierListFocus, setTierListFocus] = useState<{ listId: string; nonce: number } | null>(null);
+  const handleOpenTierList = useCallback((listId: string) => {
+    setDetailAlbum(null);
+    setSharedMix(null);
+    setActiveTab("vault");
+    setTierListFocus({ listId, nonce: Date.now() });
+  }, []);
 
   // Global App-Level Keyboard Navigation & Shortcuts
   useEffect(() => {
@@ -207,27 +254,13 @@ export default function App() {
     const loadedPlaylists = getStoredPlaylists();
     const loadedTierLists = getStoredTierLists();
     const loadedHistory = getStoredHistory();
-    // Single-axis migration: legacy likes become taste (tier A), then the
-    // flag is retired — vault membership is the only save state.
-    let migrated = false;
-    for (const a of loadedAlbums) {
-      if (a.isFavorite) {
-        if (!a.tier) {
-          a.tier = "A";
-          migrated = true;
-        }
-        if (a.isFavorite) {
-          a.isFavorite = false;
-          migrated = true;
-        }
-      }
-    }
-    if (migrated) saveStoredAlbums(loadedAlbums);
+    const loadedLoved = getStoredLovedTracks();
 
     setAlbums(loadedAlbums);
     setPlaylists(loadedPlaylists);
     setTierLists(loadedTierLists);
     setHistory(loadedHistory);
+    setLovedTracks(loadedLoved);
   }, []);
 
   // Shared links (#a= album, #s= song, #p= playlist, legacy #mix=)
@@ -402,6 +435,78 @@ export default function App() {
       saveStoredAlbums(next);
       return next;
     });
+    // Album-level love cascades to songs: liking adds every track as an
+    // album contribution (and un-mutes previously removed ones — a fresh
+    // like starts clean); unliking drops those contributions while explicit
+    // track loves and muted removals survive independently.
+    const albumKey = updated.identifier || updated.id;
+    const wasLoved = (() => {
+      const prevAlbum = albums.find(
+        (a) => a.id === updated.id || (updated.identifier && a.identifier === updated.identifier) || a.id === updated.identifier
+      );
+      return !!prevAlbum?.isFavorite;
+    })();
+    if (updated.isFavorite && !wasLoved) {
+      setLovedTracks((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const t of updated.tracks || []) {
+          const entry = next[t.id];
+          if (entry) {
+            const albumIds = entry.albumIds.includes(albumKey)
+              ? entry.albumIds
+              : [...entry.albumIds, albumKey];
+            if (entry.muted || albumIds !== entry.albumIds) {
+              next[t.id] = { ...entry, albumIds, muted: false };
+              changed = true;
+            }
+          } else {
+            next[t.id] = { track: { ...t, isFavorite: true }, explicit: false, albumIds: [albumKey], muted: false };
+            changed = true;
+          }
+        }
+        if (changed) saveStoredLovedTracks(next);
+        return changed ? next : prev;
+      });
+    } else if (updated.isFavorite) {
+      setLovedTracks((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const t of updated.tracks || []) {
+          const entry = next[t.id];
+          if (entry) {
+            if (!entry.albumIds.includes(albumKey)) {
+              next[t.id] = { ...entry, albumIds: [...entry.albumIds, albumKey] };
+              changed = true;
+            }
+          } else {
+            next[t.id] = { track: { ...t, isFavorite: true }, explicit: false, albumIds: [albumKey], muted: false };
+            changed = true;
+          }
+        }
+        if (changed) saveStoredLovedTracks(next);
+        return changed ? next : prev;
+      });
+    } else if (updated.isFavorite === false && wasLoved) {
+      setLovedTracks((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const t of updated.tracks || []) {
+          const entry = next[t.id];
+          if (entry && entry.albumIds.includes(albumKey)) {
+            const albumIds = entry.albumIds.filter((k) => k !== albumKey);
+            if (!entry.explicit && albumIds.length === 0 && !entry.muted) {
+              delete next[t.id];
+            } else {
+              next[t.id] = { ...entry, albumIds };
+            }
+            changed = true;
+          }
+        }
+        if (changed) saveStoredLovedTracks(next);
+        return changed ? next : prev;
+      });
+    }
     setDetailAlbum((current) => {
       if (!current) return null;
       if (
@@ -413,23 +518,74 @@ export default function App() {
       }
       return current;
     });
-  }, []);
+  }, [albums]);
 
-  // Vault save from the player (single axis): adds the album to the vault
-  // when missing, never removes. Taste lives in tier ranks, not here.
-  const handleToggleSaveAlbumFromPlayer = useCallback((albumToToggle: Album) => {
+  // Explicit per-track love toggle. Works on any track, vault or not.
+  // Unliking strips the heart for good: explicit cleared, album
+  // contributions dropped, muted so a still-loved album can't re-add it.
+  const handleToggleTrackLove = useCallback((track: Track) => {
+    const entry = lovedTracks[track.id];
+    const loved = !!entry && isEntryLoved(entry);
+    setLovedTracks((prev) => {
+      const next = { ...prev };
+      if (loved) {
+        const base = next[track.id] ?? entry;
+        next[track.id] = {
+          track: { ...(base?.track ?? track), isFavorite: false },
+          explicit: false,
+          albumIds: [],
+          muted: true,
+        };
+      } else {
+        const prior = next[track.id];
+        next[track.id] = {
+          track: { ...track, isFavorite: true },
+          explicit: true,
+          albumIds: prior ? prior.albumIds : [],
+          muted: false,
+        };
+      }
+      saveStoredLovedTracks(next);
+      return next;
+    });
+    showToast(
+      loved ? `Unliked "${track.title}".` : `Liked "${track.title}"!`,
+      loved ? "info" : "success"
+    );
+  }, [lovedTracks]);
+
+  // Heart toggle (taste axis): flips the liked flag, adding to the vault
+  // when missing. Vault membership and liked status travel together.
+  const handleToggleFavoriteFromPlayer = useCallback((albumToToggle: Album) => {
     setAlbums((prev) => {
       const idx = prev.findIndex(
         (a) => a.id === albumToToggle.id || (albumToToggle.identifier && a.identifier === albumToToggle.identifier)
       );
+      let next: Album[];
       if (idx === -1) {
-        // Legacy flag retired: vault membership is the only save state.
-        const next = [{ ...albumToToggle, isFavorite: false }, ...prev];
-        saveStoredAlbums(next);
-        showToast(`Saved "${albumToToggle.title}" to your Vault!`);
-        return next;
+        const newAlbum = { ...albumToToggle, isFavorite: true };
+        next = [newAlbum, ...prev];
+        showToast(`Saved "${newAlbum.title}" as liked in your Vault!`);
+      } else {
+        const current = prev[idx];
+        const newFav = !current.isFavorite;
+        next = [...prev];
+        next[idx] = { ...current, isFavorite: newFav };
+        showToast(
+          newFav
+            ? `Marked "${current.title}" as liked in your Vault!`
+            : `Unliked "${current.title}".`,
+          "info"
+        );
       }
-      showToast(`"${prev[idx].title}" is already in your vault.`, "info");
+      saveStoredAlbums(next);
+      return next;
+    });
+    setDetailAlbum((prev) => {
+      if (!prev) return null;
+      if (prev.id === albumToToggle.id || (albumToToggle.identifier && prev.identifier === albumToToggle.identifier)) {
+        return { ...prev, isFavorite: !prev.isFavorite };
+      }
       return prev;
     });
   }, []);
@@ -545,23 +701,11 @@ export default function App() {
     const loadedPlaylists = getStoredPlaylists();
     const loadedTierLists = getStoredTierLists();
     const loadedHistory = getStoredHistory();
-    // Same single-axis migration as initial load (legacy likes → tier A).
-    let migrated = false;
-    for (const a of loadedAlbums) {
-      if (a.isFavorite) {
-        if (!a.tier) {
-          a.tier = "A";
-          migrated = true;
-        }
-        a.isFavorite = false;
-        migrated = true;
-      }
-    }
-    if (migrated) saveStoredAlbums(loadedAlbums);
     setAlbums(loadedAlbums);
     setPlaylists(loadedPlaylists);
     setTierLists(loadedTierLists);
     setHistory(loadedHistory);
+    setLovedTracks(getStoredLovedTracks());
     showToast("Vault collection restored successfully!");
   };
 
@@ -578,7 +722,7 @@ export default function App() {
 
         {/* Global Toast Notification */}
         {toastMessage && (
-          <div role="status" className="fixed top-16 right-4 z-50 flex items-center space-x-2 px-3 py-2 rounded-lg bg-stone-900 border border-amber-500/40 text-stone-100 text-xs shadow-2xl animate-in fade-in slide-in-from-top-2">
+          <div role="status" className="fixed top-16 right-4 z-50 flex items-center space-x-2 px-3 py-2 rounded-lg bg-stone-900 border border-amber-500/40 text-stone-100 text-xs shadow-2xl animate-ui-fade">
             <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="font-medium">{toastMessage.text}</span>
           </div>
@@ -629,6 +773,11 @@ export default function App() {
               onUpdateTierList={handleUpdateTierList}
               onShowToast={showToast}
               onOpenArtistDiscography={(artist) => setDiscographyArtist(artist)}
+              lovedSongIds={lovedSongIds}
+              onToggleTrackLove={handleToggleTrackLove}
+              likedSongs={likedSongs}
+              tierListFocus={tierListFocus}
+              onTierListFocusConsumed={() => setTierListFocus(null)}
             />
           )}
           </Suspense>
@@ -666,8 +815,13 @@ export default function App() {
         <PlayerBar
           onSelectAlbumForDetail={handleSelectAlbumForDetail}
           onOpenArtistDiscography={(artist) => setDiscographyArtist(artist)}
-          onToggleSaveAlbum={handleToggleSaveAlbumFromPlayer}
-          isAlbumSaved={(id) => existingAlbumIds.has(id)}
+          onToggleFavoriteAlbum={handleToggleFavoriteFromPlayer}
+          isAlbumFavorite={(id) => {
+            const a = albums.find((item) => item.id === id || item.identifier === id);
+            return !!a?.isFavorite;
+          }}
+          lovedSongIds={lovedSongIds}
+          onToggleTrackLove={handleToggleTrackLove}
         />
         </Suspense>
 
@@ -716,6 +870,9 @@ export default function App() {
             (existingAlbumIds.has(detailAlbum.id) ||
               (!!detailAlbum.identifier && existingAlbumIds.has(detailAlbum.identifier)))
           }
+          lovedSongIds={lovedSongIds}
+          onToggleTrackLove={handleToggleTrackLove}
+          onOpenTierList={handleOpenTierList}
         />
 
         {/* Global Artist Discography Modal */}

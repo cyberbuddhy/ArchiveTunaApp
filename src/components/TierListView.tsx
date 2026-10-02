@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Plus,
   Trash2,
@@ -34,6 +34,7 @@ interface TierListViewProps {
   onSelectAlbumForDetail: (album: Album) => void;
   onUpdateAlbum: (album: Album) => void;
   onShowToast: (msg: string, type?: "success" | "info") => void;
+  focusListId?: string | null;
 }
 
 export const TierListView: React.FC<TierListViewProps> = ({
@@ -45,6 +46,7 @@ export const TierListView: React.FC<TierListViewProps> = ({
   onSelectAlbumForDetail,
   onUpdateAlbum,
   onShowToast,
+  focusListId,
 }) => {
   const { playAlbum } = usePlayer();
   const [selectedListId, setSelectedListId] = useState<string>("");
@@ -65,6 +67,13 @@ export const TierListView: React.FC<TierListViewProps> = ({
     if (found) return found;
     return tierLists[0] || null;
   }, [selectedListId, tierLists]);
+
+  // Deep-link from the album Rate panel: jump straight to a list
+  useEffect(() => {
+    if (focusListId && tierLists.some((t) => t.id === focusListId)) {
+      setSelectedListId(focusListId);
+    }
+  }, [focusListId, tierLists]);
 
   const defaultListName = `Tierlist #${tierLists.length + 1}`;
 
@@ -100,6 +109,97 @@ export const TierListView: React.FC<TierListViewProps> = ({
     });
     onShowToast(`Removed from Tier List`, "info");
   };
+
+  const handleUnrateItem = (albumId: string) => {
+    if (!activeList) return;
+    const nextItems = activeList.items.map((it) =>
+      it.albumId === albumId ? { ...it, rank: undefined } : it
+    );
+    onUpdateTierList({
+      ...activeList,
+      items: nextItems,
+      updatedAt: new Date().toISOString(),
+    });
+    onShowToast(`Moved back to Unrated`, "info");
+  };
+
+  // Shared album tile: draggable into tiers, click opens details.
+  // fullAlbum resolves against the vault so tiles stay live.
+  const renderTile = (item: TierItem) => {
+    const fullAlbum = albums.find((a) => a.id === item.albumId);
+    return (
+      <div
+        key={item.albumId}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", item.albumId);
+          setDraggedAlbumId(item.albumId);
+        }}
+        onDragEnd={() => {
+          setDraggedAlbumId(null);
+          setActiveDropTier(null);
+        }}
+        onClick={async () => {
+          if (!fullAlbum) return;
+          if ((!fullAlbum.tracks || fullAlbum.tracks.length === 0) && fullAlbum.identifier) {
+            try {
+              const fresh = await fetchAlbumDetails(fullAlbum.identifier);
+              onSelectAlbumForDetail(fresh);
+              return;
+            } catch {
+              // fall through to the stored copy
+            }
+          }
+          onSelectAlbumForDetail(fullAlbum);
+        }}
+        className="group relative w-20 sm:w-24 shrink-0 flex flex-col items-center cursor-grab active:cursor-grabbing select-none transition-transform hover:scale-105"
+        title={`${item.albumTitle} by ${item.artist} (Drag to change tier, click for details)`}
+      >
+        {/* Cover Art Tile */}
+        <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-stone-900 border border-stone-800/90 group-hover:border-amber-500/60 shadow-sm transition-all">
+          <img
+            src={
+              item.coverUrl ||
+              `https://archive.org/services/img/${item.albumId}` ||
+              "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80"
+            }
+            alt={item.albumTitle}
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src =
+                "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80";
+            }}
+          />
+
+          {/* Hover Remove Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRemoveItem(item.albumId);
+            }}
+            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-stone-950/90 hover:bg-rose-500 text-stone-300 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow cursor-pointer z-10"
+            title="Remove from tier list"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+
+        {/* Title text */}
+        <p className="w-full text-[10px] font-medium text-stone-300 group-hover:text-amber-300 truncate text-center mt-1">
+          {item.albumTitle}
+        </p>
+      </div>
+    );
+  };
+
+  const unratedItems = useMemo(
+    () => (activeList ? activeList.items.filter((it) => !it.rank) : []),
+    [activeList]
+  );
 
   const handleExportImage = async () => {
     if (!activeList) return;
@@ -369,81 +469,44 @@ export const TierListView: React.FC<TierListViewProps> = ({
 
                 {/* Right Container of Album Tiles */}
                 <div className="flex-1 p-2 sm:p-2.5 flex items-center flex-wrap gap-2.5 min-h-[82px]">
-                  {itemsInTier.map((item) => {
-                    const fullAlbum = albums.find((a) => a.id === item.albumId);
-                    return (
-                      <div
-                        key={item.albumId}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData("text/plain", item.albumId);
-                          setDraggedAlbumId(item.albumId);
-                        }}
-                        onDragEnd={() => {
-                          setDraggedAlbumId(null);
-                          setActiveDropTier(null);
-                        }}
-                        onClick={async () => {
-                          if (!fullAlbum) return;
-                          if ((!fullAlbum.tracks || fullAlbum.tracks.length === 0) && fullAlbum.identifier) {
-                            try {
-                              const fresh = await fetchAlbumDetails(fullAlbum.identifier);
-                              onSelectAlbumForDetail(fresh);
-                              return;
-                            } catch {
-                              // fall through to the stored copy
-                            }
-                          }
-                          onSelectAlbumForDetail(fullAlbum);
-                        }}
-                        className="group relative w-20 sm:w-24 shrink-0 flex flex-col items-center cursor-grab active:cursor-grabbing select-none transition-transform hover:scale-105"
-                        title={`${item.albumTitle} by ${item.artist} (Drag to change tier, click for details)`}
-                      >
-                        {/* Cover Art Tile */}
-                        <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-stone-900 border border-stone-800/90 group-hover:border-amber-500/60 shadow-sm transition-all">
-                          <img
-                            src={
-                              item.coverUrl ||
-                              `https://archive.org/services/img/${item.albumId}` ||
-                              "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80"
-                            }
-                            alt={item.albumTitle}
-                            referrerPolicy="no-referrer"
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src =
-                                "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80";
-                            }}
-                          />
-
-                          {/* Hover Remove Button */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveItem(item.albumId);
-                            }}
-                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-stone-950/90 hover:bg-rose-500 text-stone-300 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow cursor-pointer z-10"
-                            title="Remove from tier list"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-
-                        {/* Title text */}
-                        <p className="w-full text-[10px] font-medium text-stone-300 group-hover:text-amber-300 truncate text-center mt-1">
-                          {item.albumTitle}
-                        </p>
-                      </div>
-                    );
-                  })}
+                  {itemsInTier.map((item) => renderTile(item))}
                 </div>
               </div>
             );
           })}
         </div>
+
+          {/* UNRATED TRAY — albums waiting for a verdict, below F */}
+          {unratedItems.length > 0 && (
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const albumId = e.dataTransfer.getData("text/plain") || draggedAlbumId;
+                if (albumId) handleUnrateItem(albumId);
+                setDraggedAlbumId(null);
+                setActiveDropTier(null);
+              }}
+              className="rounded-2xl border border-dashed border-stone-700 bg-stone-950/40 p-3"
+            >
+              <div className="flex items-center justify-between px-1 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500">
+                    Unrated
+                  </span>
+                  <span className="text-[11px] text-stone-600 font-mono">
+                    ({unratedItems.length})
+                  </span>
+                </div>
+                <span className="text-[11px] text-stone-600">
+                  Drag into a tier above — or drop a ranked tile here to unrate
+                </span>
+              </div>
+              <div className="flex items-start flex-wrap gap-2.5 min-h-[82px]">
+                {unratedItems.map((item) => renderTile(item))}
+              </div>
+            </div>
+          )}
           </>
         ) : (
           <div className="bg-stone-900/30 border border-stone-800 rounded-2xl p-8 text-center space-y-3">
