@@ -362,7 +362,7 @@ export const LocalLibraryTab: React.FC<LocalLibraryTabProps> = ({ searchQuery, o
             return (
               <div
                 key={entry.id}
-                className={`group px-3 py-2 flex items-center gap-3 text-xs border transition-colors ${
+                className={`group row-cv px-3 py-2 flex items-center gap-3 text-xs border transition-colors ${
                   isCurrent
                     ? "bg-sky-500/10 text-sky-300 border-sky-500/20"
                     : "border-transparent hover:bg-white/5 text-stone-200"

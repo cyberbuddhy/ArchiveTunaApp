@@ -416,13 +416,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     });
   }, [mixHistory, albums, likedSongs]);
   const handleDismissMix = (mix: SmartMix) => {
-    if (!confirm(`Remove "${mix.name}"? It returns when its songs change.`)) return;
     setDismissedMixes((prev) => {
       const next = { ...prev, [mix.id]: mixSignature(mix) };
       saveStoredDismissedMixes(next);
       return next;
     });
-    if (onShowToast) onShowToast(`Removed "${mix.name}".`, "info");
+    if (onShowToast) onShowToast(`Removed "${mix.name}" — returns when its songs change.`, "info");
   };
 
   const activeMix = smartMixes.find((m) => m.id === selectedPlaylistId) || null;
@@ -1222,7 +1221,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 return (
                   <div
                     key={item.id}
-                    className={`group px-3 py-2 flex items-center gap-3 text-xs border transition-colors ${
+                    className={`group row-cv px-3 py-2 flex items-center gap-3 text-xs border transition-colors ${
                       isCurrent
                         ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
                         : "border-transparent hover:bg-white/5 text-stone-200"
@@ -1579,12 +1578,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           </button>
                         </>
                       ) : (
-                        <button
-                          onClick={() => {
-                            if (confirm(`Delete "${activePlaylist.name}"?`)) {
-                              onDeletePlaylist(activePlaylist.id);
-                            }
-                          }}
+                          <button
+                            onClick={() => onDeletePlaylist(activePlaylist.id)}
                           className="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-stone-800 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1606,7 +1601,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           <React.Fragment key={`${track.id}_${idx}`}>
                           <div
                             onClick={() => playTrack(track, undefined, activePlaylist.tracks)}
-                            className={`group flex items-center gap-3 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
+                            className={`group row-cv flex items-center gap-3 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
                               isCurrent
                                 ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
                                 : "border-transparent hover:bg-white/5 text-stone-200"
@@ -1766,7 +1761,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   <React.Fragment key={`${track.id}_${idx}`}>
                   <div
                     onClick={() => handlePlaySongFromAll({ track, album })}
-                    className={`group px-3 py-2 flex items-center gap-3 text-xs transition-colors min-h-[46px] border rounded-lg cursor-pointer ${
+                    className={`group row-cv px-3 py-2 flex items-center gap-3 text-xs transition-colors min-h-[46px] border rounded-lg cursor-pointer ${
                       isCurrent
                         ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
                         : "border-transparent hover:bg-white/5 text-stone-200"

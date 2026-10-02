@@ -60,6 +60,7 @@ interface SearchViewProps {
   resetKey?: number;
   onOpenArtistDiscography?: (artistName: string) => void;
   initialSearch?: { query: string; field?: string } | null;
+  onShowToast?: (message: string, type?: "success" | "info") => void;
 }
 
 export const SearchView: React.FC<SearchViewProps> = ({
@@ -70,6 +71,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
   resetKey,
   onOpenArtistDiscography,
   initialSearch,
+  onShowToast,
 }) => {
   const { playAlbum, playTrack, currentTrack, isPlaying } = usePlayer();
 
@@ -89,7 +91,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
       const full = await fetchAlbumDetails(albumId);
       onSelectAlbumForDetail(full);
     } catch {
-      // Unresolvable album (deleted upstream?) — stay on search
+      if (onShowToast) onShowToast("Couldn't open that album — it may be gone upstream.", "info");
     } finally {
       setOpeningAlbumId(null);
     }
@@ -547,9 +549,12 @@ export const SearchView: React.FC<SearchViewProps> = ({
       const fullAlbum = await fetchAlbumDetails(identifier);
       if (fullAlbum.tracks && fullAlbum.tracks.length > 0) {
         playAlbum(fullAlbum, 0);
+      } else if (onShowToast) {
+        onShowToast("No playable tracks on that recording.", "info");
       }
     } catch (err) {
       console.error("Playback preview failed:", err);
+      if (onShowToast) onShowToast("Couldn't start playback — check connection.", "info");
     }
   };
 
@@ -560,6 +565,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
       onCaptureAlbum(fullAlbum);
     } catch (err) {
       console.error("Capture failed:", err);
+      if (onShowToast) onShowToast("Couldn't capture that recording.", "info");
     } finally {
       setCapturingId(null);
     }

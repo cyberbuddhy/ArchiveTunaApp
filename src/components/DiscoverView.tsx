@@ -30,6 +30,7 @@ interface DiscoverViewProps {
   onSelectAlbumForDetail: (album: Album) => void;
   existingAlbumIds: Set<string>;
   onOpenArtistDiscography?: (artistName: string) => void;
+  onShowToast?: (message: string, type?: "success" | "info") => void;
 }
 
 export const DiscoverView: React.FC<DiscoverViewProps> = ({
@@ -37,6 +38,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   onSelectAlbumForDetail,
   existingAlbumIds,
   onOpenArtistDiscography,
+  onShowToast,
 }) => {
   const { playAlbum, currentTrack, isPlaying } = usePlayer();
 
@@ -231,9 +233,12 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
       const fullAlbum = await fetchAlbumDetails(identifier);
       if (fullAlbum.tracks && fullAlbum.tracks.length > 0) {
         playAlbum(fullAlbum, 0);
+      } else if (onShowToast) {
+        onShowToast("No playable tracks on that recording.", "info");
       }
     } catch (err) {
       console.error("Playback preview failed:", err);
+      if (onShowToast) onShowToast("Couldn't start playback — check connection.", "info");
     }
   };
 

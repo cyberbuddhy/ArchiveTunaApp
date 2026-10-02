@@ -1,4 +1,5 @@
 import { Track } from "../types";
+import { fetchArchiveJson } from "./api";
 
 // Serverless autoplay: related tracks straight from archive.org advancedsearch.
 export async function fetchRelatedTracks(seed: Track, excludeIds: string[], rows = 4): Promise<Track[]> {
@@ -22,21 +23,26 @@ export async function fetchRelatedTracks(seed: Track, excludeIds: string[], rows
         .filter((d: any) => !exclude.has(d.identifier))
         .slice(0, rows);
       const out: Track[] = [];
-      for (const d of docs) {
-        try {
-          const m = await fetch(`https://archive.org/metadata/${encodeURIComponent(d.identifier)}`, { headers: { Accept: "application/json" } });
-          if (!m.ok) continue;
-          const md: any = await m.json();
+      const settled = await Promise.allSettled(
+        docs.map(async (d: any) => {
+          const md: any = await fetchArchiveJson(
+            `https://archive.org/metadata/${encodeURIComponent(d.identifier)}`,
+            10000
+          );
           const f = (md.files || []).find((x: any) => /\.(mp3|ogg|m4a)$/i.test(x.name || ""));
-          if (!f) continue;
-          out.push({
+          if (!f) return null;
+          return {
             id: `${d.identifier}_0_${encodeURIComponent(f.name)}`,
             title: d.title || f.name, artist: d.creator || "Unknown",
             album: d.title, albumId: d.identifier, trackNumber: 1, duration: 0,
             streamUrl: `https://archive.org/download/${d.identifier}/${encodeURIComponent(f.name)}`,
             format: f.format || "MP3",
-          });
-        } catch { /* skip doc */ }
+          } as Track;
+        })
+      );
+      for (const s of settled) {
+        if (s.status === "fulfilled" && s.value) out.push(s.value);
+        if (out.length >= rows) break;
       }
       if (out.length) return out;
     } catch { /* try next query */ }

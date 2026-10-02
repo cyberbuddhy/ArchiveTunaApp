@@ -329,12 +329,10 @@ export const TierListView: React.FC<TierListViewProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                    if (confirm(`Delete Tier List "${tl.name}"?`)) {
-                      onDeleteTierList(tl.id);
-                      if (selectedListId === tl.id) {
-                        setSelectedListId("");
-                      }
-                    }
+                  onDeleteTierList(tl.id);
+                  if (selectedListId === tl.id) {
+                    setSelectedListId("");
+                  }
                 }}
                 className="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-stone-800 opacity-0 group-hover:opacity-100 transition-opacity"
                 title="Delete Tier List"

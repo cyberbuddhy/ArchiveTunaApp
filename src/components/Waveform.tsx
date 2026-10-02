@@ -32,6 +32,9 @@ export const Waveform: React.FC<{ playing: boolean }> = ({ playing }) => {
     let raf = 0;
     let frame = 0;
     let accent = "#f59e0b";
+    // Reused analyser buffers: allocating per frame churns GC and battery.
+    let freq: Uint8Array | null = null;
+    let td: Uint8Array | null = null;
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     // PS1-mode particles: fixed pool, no allocation in the loop.
     const dots = Array.from({ length: 34 }, (_, i) => ({
@@ -63,6 +66,11 @@ export const Waveform: React.FC<{ playing: boolean }> = ({ playing }) => {
     };
 
     const draw = () => {
+      // Hidden tab: stop the loop entirely; visibility handler restarts it.
+      if (document.hidden) {
+        raf = 0;
+        return;
+      }
       raf = requestAnimationFrame(draw);
       frame++;
       if (frame % 120 === 0) readAccent();
@@ -72,14 +80,18 @@ export const Waveform: React.FC<{ playing: boolean }> = ({ playing }) => {
         if (frame % 10 === 1) drawIdle();
         return;
       }
-      const freq = new Uint8Array(a.frequencyBinCount);
+      if (!freq || freq.length !== a.frequencyBinCount) {
+        freq = new Uint8Array(a.frequencyBinCount);
+      }
+      if (!td || td.length !== a.fftSize) {
+        td = new Uint8Array(a.fftSize);
+      }
       a.getByteFrequencyData(freq);
       const use = Math.max(8, Math.floor(freq.length * USE_RATIO));
       ctx.clearRect(0, 0, W, H);
 
       if (m === "wave") {
         // WMP scope: time-domain oscilloscope line.
-        const td = new Uint8Array(a.fftSize);
         a.getByteTimeDomainData(td);
         ctx.strokeStyle = accent;
         ctx.lineWidth = 1.5;
@@ -138,8 +150,16 @@ export const Waveform: React.FC<{ playing: boolean }> = ({ playing }) => {
       drawIdle();
       return;
     }
+    const onVisible = () => {
+      if (!document.hidden && !raf) draw();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     draw();
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [playing, mode]);
 
   const cycle = () => {

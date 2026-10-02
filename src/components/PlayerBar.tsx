@@ -944,7 +944,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                   <React.Fragment key={`mobile_q_${track.id || i}_${i}`}>
                   <div
                     onClick={() => playTrack(track, currentAlbum || undefined)}
-                    className={`group flex items-center gap-3 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
+                    className={`group row-cv flex items-center gap-3 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
                       isCurrent
                         ? "bg-amber-500/10 text-amber-300 border-amber-500/20 font-semibold"
                         : "text-stone-200 border-transparent hover:bg-white/5"
@@ -1070,7 +1070,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                   <React.Fragment key={`desk_q_${track.id || i}_${i}`}>
                   <div
                     onClick={() => playTrack(track)}
-                    className={`group flex items-center gap-3 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
+                    className={`group row-cv flex items-center gap-3 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
                       isCurrent
                         ? "bg-amber-500/10 border-amber-500/20 text-amber-300 font-semibold"
                         : "text-stone-300 border-transparent hover:bg-white/5"

@@ -298,3 +298,11 @@ body {
   animation: surprise-border-flash 1.2s linear infinite;
 }
 
+/* Virtualization-lite for long song lists: offscreen rows skip layout and
+   paint until scrolled near. Unlike fixed-row windowing this tolerates the
+   variable-height lyrics panels. */
+.row-cv {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
+}
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from "react";
 import { PlayerProvider } from "./context/PlayerContext";
 import { Navbar, NavTabType } from "./components/Navbar";
 import { UpdateBanner } from "./components/UpdateBanner";
@@ -234,20 +234,29 @@ export default function App() {
     detailAlbum,
   ]);
 
-  // Notification toast
-  const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "info" } | null>(
-    null
-  );
+  // Notification toast (optional Undo action; longer dwell when actionable)
+  const [toastMessage, setToastMessage] = useState<{
+    text: string;
+    type: "success" | "info";
+    action?: { label: string; onClick: () => void };
+  } | null>(null);
+  const toastTimer = useRef<number | null>(null);
 
   const tabFallback = (
     <div className="py-20 text-center text-xs text-stone-500">Loading…</div>
   );
 
-  const showToast = (text: string, type: "success" | "info" = "success") => {
-    setToastMessage({ text, type });
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3000);
+  const showToast = (
+    text: string,
+    type: "success" | "info" = "success",
+    action?: { label: string; onClick: () => void }
+  ) => {
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    setToastMessage({ text, type, action });
+    toastTimer.current = window.setTimeout(
+      () => setToastMessage(null),
+      action ? 6000 : 3000
+    );
   };
 
   // Initial load from storage
@@ -593,13 +602,24 @@ export default function App() {
   }, []);
 
   const handleDeleteAlbum = useCallback((albumId: string) => {
+    const doomed = albums.find((a) => a.id === albumId || a.identifier === albumId);
     setAlbums((prev) => {
       const filtered = prev.filter((a) => a.id !== albumId && a.identifier !== albumId);
       saveStoredAlbums(filtered);
       return filtered;
     });
-    showToast("Album removed from your Vault.", "info");
-  }, []);
+    showToast("Album removed from your Vault.", "info", doomed ? {
+      label: "Undo",
+      onClick: () => {
+        setAlbums((prev) => {
+          if (prev.some((a) => a.id === doomed.id)) return prev;
+          const next = [doomed, ...prev];
+          saveStoredAlbums(next);
+          return next;
+        });
+      },
+    } : undefined);
+  }, [albums]);
 
   const handleCreatePlaylist = useCallback((name: string, description?: string) => {
     const newPlaylist: Playlist = {
@@ -620,13 +640,24 @@ export default function App() {
   }, []);
 
   const handleDeletePlaylist = useCallback((playlistId: string) => {
+    const doomed = playlists.find((p) => p.id === playlistId);
     setPlaylists((prev) => {
       const filtered = prev.filter((p) => p.id !== playlistId);
       saveStoredPlaylists(filtered);
       return filtered;
     });
-    showToast("Playlist deleted.", "info");
-  }, []);
+    showToast("Playlist deleted.", "info", doomed ? {
+      label: "Undo",
+      onClick: () => {
+        setPlaylists((prev) => {
+          if (prev.some((p) => p.id === doomed.id)) return prev;
+          const next = [...prev, doomed];
+          saveStoredPlaylists(next);
+          return next;
+        });
+      },
+    } : undefined);
+  }, [playlists]);
 
   const handleUpdatePlaylist = useCallback((updated: Playlist) => {
     setPlaylists((prev) => {
@@ -679,13 +710,24 @@ export default function App() {
   }, []);
 
   const handleDeleteTierList = useCallback((tierListId: string) => {
+    const doomed = tierLists.find((t) => t.id === tierListId);
     setTierLists((prev) => {
       const filtered = prev.filter((t) => t.id !== tierListId);
       saveStoredTierLists(filtered);
       return filtered;
     });
-    showToast("Tier list deleted.", "info");
-  }, []);
+    showToast("Tier list deleted.", "info", doomed ? {
+      label: "Undo",
+      onClick: () => {
+        setTierLists((prev) => {
+          if (prev.some((t) => t.id === doomed.id)) return prev;
+          const next = [...prev, doomed];
+          saveStoredTierLists(next);
+          return next;
+        });
+      },
+    } : undefined);
+  }, [tierLists]);
 
   const handleUpdateTierList = useCallback((updated: TierList) => {
     setTierLists((prev) => {
@@ -733,6 +775,19 @@ export default function App() {
           <div role="status" className="fixed top-16 right-4 z-50 flex items-center space-x-2 px-3 py-2 rounded-lg bg-stone-900 border border-amber-500/40 text-stone-100 text-xs shadow-2xl animate-ui-fade">
             <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="font-medium">{toastMessage.text}</span>
+            {toastMessage.action && (
+              <button
+                type="button"
+                onClick={() => {
+                  toastMessage.action?.onClick();
+                  if (toastTimer.current) window.clearTimeout(toastTimer.current);
+                  setToastMessage(null);
+                }}
+                className="px-2 py-0.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold transition-colors cursor-pointer shrink-0"
+              >
+                {toastMessage.action.label}
+              </button>
+            )}
           </div>
         )}
 
@@ -750,6 +805,7 @@ export default function App() {
               resetKey={searchResetKey}
               onOpenArtistDiscography={(artist) => setDiscographyArtist(artist)}
               initialSearch={externalSearchQuery}
+              onShowToast={showToast}
             />
           )}
 
@@ -760,6 +816,7 @@ export default function App() {
               onSelectAlbumForDetail={handleSelectAlbumForDetail}
               existingAlbumIds={existingAlbumIds}
               onOpenArtistDiscography={(artist) => setDiscographyArtist(artist)}
+              onShowToast={showToast}
             />
           )}
 

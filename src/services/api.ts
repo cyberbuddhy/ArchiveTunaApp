@@ -757,24 +757,25 @@ export async function fetchArtistDiscography(artistName: string): Promise<Artist
   const cached = getCachedDiscography(cleanName);
   if (cached) return cached;
 
-  let mbArtist: any = null;
-  let releaseGroups: any[] = [];
-
-  try {
-    const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(cleanName)}&fmt=json`;
-    const mbData = await fetchArchiveJson(mbSearchUrl);
-    const artists = mbData.artists || [];
-    if (artists.length > 0) {
-      mbArtist = artists.find((a: any) => a.name.toLowerCase() === cleanName.toLowerCase()) || artists[0];
-      if (mbArtist && mbArtist.id) {
-        const rgUrl = `https://musicbrainz.org/ws/2/release-group?artist=${encodeURIComponent(mbArtist.id)}&limit=100&fmt=json`;
-        const rgData = await fetchArchiveJson(rgUrl);
-        releaseGroups = rgData["release-groups"] || [];
-      }
+  // MusicBrainz official catalog and Archive.org live tapes are independent
+  // sources — fetch concurrently instead of sequentially.
+  const fetchOfficial: Promise<{ mbArtist: any; releaseGroups: any[] }> = (async () => {
+    try {
+      const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(cleanName)}&fmt=json`;
+      const mbData = await fetchArchiveJson(mbSearchUrl);
+      const artists = mbData.artists || [];
+      if (artists.length === 0) return { mbArtist: null, releaseGroups: [] };
+      const found =
+        artists.find((a: any) => a.name.toLowerCase() === cleanName.toLowerCase()) || artists[0];
+      if (!found?.id) return { mbArtist: found ?? null, releaseGroups: [] };
+      const rgUrl = `https://musicbrainz.org/ws/2/release-group?artist=${encodeURIComponent(found.id)}&limit=100&fmt=json`;
+      const rgData = await fetchArchiveJson(rgUrl);
+      return { mbArtist: found, releaseGroups: rgData["release-groups"] || [] };
+    } catch (err) {
+      console.warn("MusicBrainz query warning:", err);
+      return { mbArtist: null, releaseGroups: [] };
     }
-  } catch (err) {
-    console.warn("MusicBrainz query warning:", err);
-  }
+  })();
 
   // Fetch Live Tapes & Concerts from Archive.org.
   // Primary: exact creator credit. Fallback: tokenized across creator/title/
@@ -816,24 +817,29 @@ export async function fetchArtistDiscography(artistName: string): Promise<Artist
   let liveTapes: any[] = [];
   let totalLiveTapes = 0;
 
-  try {
-    const primary = await runLiveQuery(`creator:("${cleanArtist}") AND mediatype:(audio)`, "date desc");
-    totalLiveTapes = primary.total;
-    liveTapes = primary.docs.map(mapLiveDoc);
-    if (totalLiveTapes === 0) {
-      const terms = searchTerms(cleanArtist);
-      if (terms.length > 0) {
-        const fallbackQ = `(${terms
-          .map((t) => `(creator:${t} OR title:${t} OR subject:${t} OR collection:${t} OR identifier:${t}*)`)
-          .join(" AND ")}) AND mediatype:(audio)`;
-        const fallback = await runLiveQuery(fallbackQ, "downloads desc");
-        totalLiveTapes = fallback.total;
-        liveTapes = fallback.docs.map(mapLiveDoc);
+  const fetchLive = (async () => {
+    try {
+      const primary = await runLiveQuery(`creator:("${cleanArtist}") AND mediatype:(audio)`, "date desc");
+      totalLiveTapes = primary.total;
+      liveTapes = primary.docs.map(mapLiveDoc);
+      if (totalLiveTapes === 0) {
+        const terms = searchTerms(cleanArtist);
+        if (terms.length > 0) {
+          const fallbackQ = `(${terms
+            .map((t) => `(creator:${t} OR title:${t} OR subject:${t} OR collection:${t} OR identifier:${t}*)`)
+            .join(" AND ")}) AND mediatype:(audio)`;
+          const fallback = await runLiveQuery(fallbackQ, "downloads desc");
+          totalLiveTapes = fallback.total;
+          liveTapes = fallback.docs.map(mapLiveDoc);
+        }
       }
+    } catch (err) {
+      console.warn("Archive.org live query warning:", err);
     }
-  } catch (err) {
-    console.warn("Archive.org live query warning:", err);
-  }
+  })();
+
+  const [official] = await Promise.all([fetchOfficial, fetchLive]);
+  const { mbArtist, releaseGroups } = official;
 
   const officialAlbums: any[] = [];
   const officialEPs: any[] = [];
@@ -1089,27 +1095,31 @@ export const TIME_CAPSULES: TimeCapsule[] = [
 ];
 
 export async function fetchTimeCapsules(rows = 6): Promise<TimeCapsuleShelf[]> {
-  const shelves = await Promise.allSettled(
-    TIME_CAPSULES.map(async (cap) => {
-      const sUrl = new URL("https://archive.org/advancedsearch.php");
-      sUrl.searchParams.set("q", `mediatype:audio AND (${cap.query})`);
-      sUrl.searchParams.set("output", "json");
-      sUrl.searchParams.set("rows", String(rows));
-      sUrl.searchParams.set("sort[]", "downloads desc");
-      ["identifier", "title", "creator", "year"].forEach((f) => sUrl.searchParams.append("fl[]", f));
-      const data = await fetchArchiveJson(sUrl.toString());
-      const items = (data?.response?.docs || []).map((doc: any) => ({
-        identifier: doc.identifier,
-        title: doc.title || doc.identifier,
-        artist: doc.creator || "Unknown Artist",
-        year: doc.year || "",
-        coverUrl: `https://archive.org/services/img/${doc.identifier}`,
-      }));
-      return { ...cap, items };
-    })
-  );
-  return shelves
-    .filter((r): r is PromiseFulfilledResult<TimeCapsuleShelf> => r.status === "fulfilled")
-    .map((r) => r.value)
-    .filter((s) => s.items.length > 0);
+  // 3-at-a-time: 11 parallel searches stall mobile radios and trip
+  // archive.org throttling; small batches stay fast and fail fast.
+  const fetchOne = async (cap: TimeCapsule): Promise<TimeCapsuleShelf> => {
+    const sUrl = new URL("https://archive.org/advancedsearch.php");
+    sUrl.searchParams.set("q", `mediatype:audio AND (${cap.query})`);
+    sUrl.searchParams.set("output", "json");
+    sUrl.searchParams.set("rows", String(rows));
+    sUrl.searchParams.set("sort[]", "downloads desc");
+    ["identifier", "title", "creator", "year"].forEach((f) => sUrl.searchParams.append("fl[]", f));
+    const data = await fetchArchiveJson(sUrl.toString());
+    const items = (data?.response?.docs || []).map((doc: any) => ({
+      identifier: doc.identifier,
+      title: doc.title || doc.identifier,
+      artist: doc.creator || "Unknown Artist",
+      year: doc.year || "",
+      coverUrl: `https://archive.org/services/img/${doc.identifier}`,
+    }));
+    return { ...cap, items };
+  };
+  const shelves: TimeCapsuleShelf[] = [];
+  for (let i = 0; i < TIME_CAPSULES.length; i += 3) {
+    const batch = await Promise.allSettled(TIME_CAPSULES.slice(i, i + 3).map(fetchOne));
+    for (const r of batch) {
+      if (r.status === "fulfilled" && r.value.items.length > 0) shelves.push(r.value);
+    }
+  }
+  return shelves;
 }

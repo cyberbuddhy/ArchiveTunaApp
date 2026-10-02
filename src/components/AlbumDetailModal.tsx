@@ -954,10 +954,8 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                 {onDeleteAlbum && (
                   <button
                     onClick={() => {
-                      if (confirm(`Remove "${album.title}" from your library?`)) {
-                        onDeleteAlbum(album.id);
-                        onClose();
-                      }
+                      onDeleteAlbum(album.id);
+                      onClose();
                     }}
                     className="w-9 h-9 rounded-full grid place-items-center border border-white/10 text-stone-500 hover:text-red-400 hover:border-red-500/30 hover:bg-white/5 transition-colors cursor-pointer"
                     title="Remove album from library"
@@ -1038,7 +1036,7 @@ export const AlbumDetailModal: React.FC<AlbumDetailModalProps> = ({
                   return (
                     <React.Fragment key={track.id || idx}>
                     <div
-                      className={`group relative flex items-center gap-3 px-3 py-2 rounded-lg transition-colors border ${
+                      className={`group relative row-cv flex items-center gap-3 px-3 py-2 rounded-lg transition-colors border ${
                         isCurrent
                           ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
                           : "border-transparent hover:bg-white/5 text-stone-200"
