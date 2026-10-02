@@ -1,4 +1,6 @@
 import { Album, Playlist, ListenHistoryItem, LibraryDump, Track, TierList, LovedTrackEntry } from "../types";
+import { getStoredPlayerSettings, savePlayerSettings } from "./playerSettings";
+import { getStoredThemeId, saveThemeId } from "./themes";
 
 const STORAGE_KEYS = {
   ALBUMS: "archive_vault_albums_v2",
@@ -172,7 +174,7 @@ export function recordListen(track: Track, album?: Album): void {
   }
 }
 
-// "Dump" user library to downloadable file
+// "Dump" user library to downloadable file (v2: full session snapshot)
 export function dumpLibraryToFile(): void {
   const albums = getStoredAlbums();
   const playlists = getStoredPlaylists();
@@ -182,14 +184,28 @@ export function dumpLibraryToFile(): void {
   const totalTracks = albums.reduce((acc, a) => acc + (a.tracks?.length || 0), 0);
   const userNoteCount = albums.filter((a) => !!a.userNotes).length;
 
+  let capsuleOffset: number | undefined;
+  try {
+    const raw = localStorage.getItem("archive_capsule_offset_v1");
+    if (raw !== null) capsuleOffset = Number(raw) || 0;
+  } catch {
+    /* private mode */
+  }
+
   const dump: LibraryDump = {
-    version: "1.0",
+    version: "2.0",
     appName: "ArchiveTuna",
     exportedAt: new Date().toISOString(),
     albums,
     playlists,
     tierLists,
     listenHistory: history,
+    playerSettings: getStoredPlayerSettings(),
+    searchHistory: getStoredSearchHistory(),
+    themeId: getStoredThemeId(),
+    lovedTracks: getStoredLovedTracks(),
+    dismissedMixes: getStoredDismissedMixes(),
+    capsuleOffset,
     metadata: {
       totalAlbums: albums.length,
       totalTracks,
@@ -275,6 +291,24 @@ export function parseAndValidateDump(jsonString: string): {
           }))
         : [],
       listenHistory: Array.isArray(parsed.listenHistory) ? parsed.listenHistory : [],
+      playerSettings:
+        parsed.playerSettings && typeof parsed.playerSettings === "object"
+          ? parsed.playerSettings
+          : undefined,
+      searchHistory: Array.isArray(parsed.searchHistory)
+        ? parsed.searchHistory.filter((s: any) => typeof s === "string")
+        : undefined,
+      themeId: typeof parsed.themeId === "string" ? parsed.themeId : undefined,
+      lovedTracks:
+        parsed.lovedTracks && typeof parsed.lovedTracks === "object"
+          ? parsed.lovedTracks
+          : undefined,
+      dismissedMixes:
+        parsed.dismissedMixes && typeof parsed.dismissedMixes === "object"
+          ? parsed.dismissedMixes
+          : undefined,
+      capsuleOffset:
+        typeof parsed.capsuleOffset === "number" ? parsed.capsuleOffset : undefined,
       metadata: {
         totalAlbums: parsed.albums.length,
         totalTracks: parsed.albums.reduce((acc: number, a: any) => acc + (a.tracks?.length || 0), 0),
@@ -300,6 +334,29 @@ export function restoreLibraryFromDump(
     }
     if (dump.listenHistory) {
       localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(dump.listenHistory));
+    }
+    // v2 session slices: replace wholesale for a 1:1 session restore
+    if (dump.playerSettings) {
+      savePlayerSettings(dump.playerSettings);
+    }
+    if (dump.searchHistory) {
+      saveStoredSearchHistory(dump.searchHistory);
+    }
+    if (dump.themeId) {
+      saveThemeId(dump.themeId);
+    }
+    if (dump.lovedTracks) {
+      saveStoredLovedTracks(dump.lovedTracks);
+    }
+    if (dump.dismissedMixes) {
+      saveStoredDismissedMixes(dump.dismissedMixes);
+    }
+    if (dump.capsuleOffset !== undefined) {
+      try {
+        localStorage.setItem("archive_capsule_offset_v1", String(dump.capsuleOffset));
+      } catch {
+        /* private mode */
+      }
     }
     return { addedAlbums: dump.albums.length, addedPlaylists: dump.playlists.length };
   } else {
@@ -359,6 +416,39 @@ export function restoreLibraryFromDump(
       saveStoredTierLists(mergedTierLists);
     }
 
+    // Merge session slices additively; scalar prefs keep working set except
+    // player settings which merge key-wise (dump fills gaps, nothing lost)
+    if (dump.listenHistory && dump.listenHistory.length > 0) {
+      const seen = new Set(getStoredHistory().map((h) => h.id));
+      const merged = [
+        ...getStoredHistory(),
+        ...dump.listenHistory.filter((h) => h && !seen.has(h.id)),
+      ].slice(0, 200);
+      localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(merged));
+    }
+    if (dump.playerSettings) {
+      savePlayerSettings(dump.playerSettings);
+    }
+    if (dump.searchHistory && dump.searchHistory.length > 0) {
+      const seen = new Set(getStoredSearchHistory().map((s) => s.toLowerCase()));
+      const merged = [
+        ...getStoredSearchHistory(),
+        ...dump.searchHistory.filter(
+          (s) => typeof s === "string" && !seen.has(s.toLowerCase())
+        ),
+      ].slice(0, 15);
+      saveStoredSearchHistory(merged);
+    }
+    if (dump.lovedTracks) {
+      const current = getStoredLovedTracks();
+      const merged = { ...dump.lovedTracks, ...current };
+      saveStoredLovedTracks(merged);
+    }
+    if (dump.dismissedMixes) {
+      const merged = { ...dump.dismissedMixes, ...getStoredDismissedMixes() };
+      saveStoredDismissedMixes(merged);
+    }
+
     return { addedAlbums: newAlbumsCount, addedPlaylists: newPlaylistsCount };
   }
 }
@@ -372,6 +462,17 @@ export function getStoredSearchHistory(): string[] {
   } catch (err) {
     console.error("Error reading search history", err);
     return [];
+  }
+}
+
+export function saveStoredSearchHistory(history: string[]): void {
+  try {
+    localStorage.setItem(
+      STORAGE_KEYS.SEARCH_HISTORY,
+      JSON.stringify((history || []).filter((s) => typeof s === "string").slice(0, 15))
+    );
+  } catch (err) {
+    console.error("Error saving search history", err);
   }
 }
 

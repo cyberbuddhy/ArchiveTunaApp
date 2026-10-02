@@ -256,6 +256,22 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   const activeAlbumId = currentAlbum?.id || currentTrack.albumId;
   const isFav = activeAlbumId ? isAlbumFavorite?.(activeAlbumId) : false;
 
+  // Track-aware artwork: the queue routinely crosses albums (radio, mixes),
+  // while currentAlbum only follows explicit album plays. Resolve per track.
+  const isPlaceholderArt = (u?: string) => !u || u.includes("notfound.png");
+  const trackAlbumMatch =
+    !!currentAlbum &&
+    !!currentTrack?.albumId &&
+    (currentTrack.albumId === currentAlbum.id ||
+      currentTrack.albumId === currentAlbum.identifier);
+  const activeCoverUrl = !isPlaceholderArt(
+    trackAlbumMatch ? currentAlbum?.coverUrl : undefined
+  )
+    ? currentAlbum?.coverUrl
+    : currentTrack?.albumId
+      ? `https://archive.org/services/img/${currentTrack.albumId}`
+      : undefined;
+
   const formatTimeLabel = (secs: number) => formatTime(secs, "0:00");
 
   const handleAlbumClick = async () => {
@@ -514,11 +530,15 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               onClick={handleAlbumClick}
               className="w-64 h-64 sm:w-72 sm:h-72 rounded-2xl overflow-hidden bg-stone-900 border border-stone-800 shadow-[0_15px_40px_rgba(0,0,0,0.8)] relative group cursor-pointer"
             >
-              {currentAlbum?.coverUrl ? (
+              {activeCoverUrl ? (
                 <img
-                  src={currentAlbum.coverUrl}
+                  key={activeCoverUrl}
+                  src={activeCoverUrl}
                   alt={currentTrack.title}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-stone-900 text-stone-600">
@@ -762,11 +782,15 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             className="flex items-center space-x-2.5 min-w-0 flex-1 cursor-pointer"
           >
             <div className="w-10 h-10 rounded-lg overflow-hidden bg-stone-950 border border-stone-800 shrink-0">
-              {currentAlbum?.coverUrl ? (
+              {activeCoverUrl ? (
                 <img
-                  src={currentAlbum.coverUrl}
+                  key={activeCoverUrl}
+                  src={activeCoverUrl}
                   alt={currentTrack.title}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-stone-600">
@@ -1153,9 +1177,10 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               className="w-12 h-12 rounded-xl overflow-hidden bg-stone-900 border border-stone-800 shrink-0 relative flex items-center justify-center cursor-pointer group/art hover:border-amber-500/60 transition-all shadow-md"
               title="Click to view album menu & tracks"
             >
-              {currentAlbum?.coverUrl ? (
+              {activeCoverUrl ? (
                 <img
-                  src={currentAlbum.coverUrl}
+                  key={activeCoverUrl}
+                  src={activeCoverUrl}
                   alt={currentTrack.title}
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = "none";

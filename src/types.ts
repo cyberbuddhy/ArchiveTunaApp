@@ -124,14 +124,23 @@ export interface DiscoveryResponse {
   liveArchivedMatches: LiveArchivedMatch[];
 }
 
+import type { PlayerSettings } from "./services/playerSettings";
+
 export interface LibraryDump {
-  version: "1.0";
+  version: "1.0" | "2.0";
   exportedAt: string;
   appName: "ArchiveTuna";
   albums: Album[];
   playlists: Playlist[];
   tierLists?: TierList[];
   listenHistory: ListenHistoryItem[];
+  // v2 session slices (absent in v1 dumps) — full 1:1 session restore
+  playerSettings?: PlayerSettings;
+  searchHistory?: string[];
+  themeId?: string;
+  lovedTracks?: Record<string, LovedTrackEntry>;
+  dismissedMixes?: Record<string, string>;
+  capsuleOffset?: number;
   metadata: {
     totalAlbums: number;
     totalTracks: number;

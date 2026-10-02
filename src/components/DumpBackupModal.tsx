@@ -260,6 +260,17 @@ export const DumpBackupModal: React.FC<DumpBackupModalProps> = ({
                   </span>
                 </div>
 
+                {parsedDump.version === "2.0" ? (
+                  <p className="text-[11px] text-stone-400">
+                    Full session snapshot — settings, history, theme, likes
+                    {parsedDump.searchHistory ? ", searches" : ""} restore 1:1.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-stone-500">
+                    Legacy backup (library only) — settings stay as-is.
+                  </p>
+                )}
+
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="p-2 rounded bg-stone-950/60 border border-stone-800/60">
                     <div className="text-sm font-semibold text-stone-200">{parsedDump.albums.length}</div>

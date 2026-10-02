@@ -63,6 +63,8 @@ export default function App() {
   const [tierLists, setTierLists] = useState<TierList[]>([]);
   const [history, setHistory] = useState<ListenHistoryItem[]>([]);
   const [searchResetKey, setSearchResetKey] = useState<number>(0);
+  // Bumped on backup restore so the Vault view remounts with fresh state
+  const [libraryRestoreKey, setLibraryRestoreKey] = useState(0);
 
   // Loved songs: explicit track toggles plus album-level contributions.
   // A track counts as loved while explicit OR any loved album contributes it.
@@ -706,7 +708,13 @@ export default function App() {
     setTierLists(loadedTierLists);
     setHistory(loadedHistory);
     setLovedTracks(getStoredLovedTracks());
-    showToast("Vault collection restored successfully!");
+    // v2 session slices: re-apply theme + settings so the restored session
+    // looks, sounds, and behaves 1:1 (DSP follows via settings event)
+    const restoredTheme = getStoredThemeId();
+    setThemeId(restoredTheme);
+    applyThemeToDOM(restoredTheme);
+    setLibraryRestoreKey((k) => k + 1);
+    showToast("Session restored successfully!");
   };
 
   return (
@@ -734,6 +742,7 @@ export default function App() {
           <Suspense fallback={tabFallback}>
           {activeTab === "search" && (
             <SearchView
+              key={libraryRestoreKey}
               onCaptureAlbum={handleAlbumCaptured}
               onSelectAlbumForDetail={handleSelectAlbumForDetail}
               existingAlbumIds={existingAlbumIds}
@@ -746,6 +755,7 @@ export default function App() {
 
           {activeTab === "discover" && (
             <DiscoverView
+              key={libraryRestoreKey}
               onCaptureAlbum={handleAlbumCaptured}
               onSelectAlbumForDetail={handleSelectAlbumForDetail}
               existingAlbumIds={existingAlbumIds}
@@ -755,6 +765,7 @@ export default function App() {
 
           {activeTab === "vault" && (
             <LibraryView
+              key={libraryRestoreKey}
               albums={albums}
               playlists={playlists}
               tierLists={tierLists}
@@ -813,6 +824,7 @@ export default function App() {
         {/* Persistent Audio Player Bar (lazy: not needed for first paint) */}
         <Suspense fallback={null}>
         <PlayerBar
+          key={libraryRestoreKey}
           onSelectAlbumForDetail={handleSelectAlbumForDetail}
           onOpenArtistDiscography={(artist) => setDiscographyArtist(artist)}
           onToggleFavoriteAlbum={handleToggleFavoriteFromPlayer}
