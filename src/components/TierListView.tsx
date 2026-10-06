@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { Album, TierList, TierItem, TierRank } from "../types";
+import { CoverImage } from "./CoverImage";
 import { usePlayer } from "../context/PlayerContext";
 import { fetchAlbumDetails } from "../services/api";
 import {
@@ -157,21 +158,11 @@ export const TierListView: React.FC<TierListViewProps> = ({
       >
         {/* Cover Art Tile */}
         <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-stone-900 border border-stone-800/90 group-hover:border-amber-500/60 shadow-sm transition-all">
-          <img
-            src={
-              item.coverUrl ||
-              `https://archive.org/services/img/${item.albumId}` ||
-              "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80"
-            }
+          <CoverImage
+            src={item.coverUrl || `https://archive.org/services/img/${item.albumId}`}
             alt={item.albumTitle}
-            referrerPolicy="no-referrer"
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src =
-                "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80";
-            }}
+            className="w-full h-full"
+            imgClassName="object-cover"
           />
 
           {/* Hover Remove Button */}

@@ -791,11 +791,12 @@ export default function App() {
           </div>
         )}
 
-        {/* Main Content Area: active tab only (code-split per tab for fast first paint) */}
+        {/* Main Content Area: all tabs stay mounted (hidden when inactive) so
+            loaded results + time capsules persist in RAM across tab switches */}
         <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 pt-4 sm:pt-5 pb-36 sm:pb-12">
           <UpdateBanner />
           <Suspense fallback={tabFallback}>
-          {activeTab === "search" && (
+          <div className={activeTab === "search" ? undefined : "hidden"}>
             <SearchView
               key={libraryRestoreKey}
               onCaptureAlbum={handleAlbumCaptured}
@@ -807,9 +808,9 @@ export default function App() {
               initialSearch={externalSearchQuery}
               onShowToast={showToast}
             />
-          )}
+          </div>
 
-          {activeTab === "discover" && (
+          <div className={activeTab === "discover" ? undefined : "hidden"}>
             <DiscoverView
               key={libraryRestoreKey}
               onCaptureAlbum={handleAlbumCaptured}
@@ -818,9 +819,9 @@ export default function App() {
               onOpenArtistDiscography={(artist) => setDiscographyArtist(artist)}
               onShowToast={showToast}
             />
-          )}
+          </div>
 
-          {activeTab === "vault" && (
+          <div className={activeTab === "vault" ? undefined : "hidden"}>
             <LibraryView
               key={libraryRestoreKey}
               albums={albums}
@@ -847,7 +848,7 @@ export default function App() {
               tierListFocus={tierListFocus}
               onTierListFocusConsumed={() => setTierListFocus(null)}
             />
-          )}
+          </div>
           </Suspense>
         </main>
 

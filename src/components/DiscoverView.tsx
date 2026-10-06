@@ -24,6 +24,12 @@ import { GENRE_HIERARCHY, GenreNode } from "../data/genreHierarchy";
 import { Album, SearchCollectionType, SearchEraType } from "../types";
 import { searchArchive, fetchAlbumDetails, fetchTimeCapsules, TIME_CAPSULES, TimeCapsuleShelf } from "../services/api";
 import { usePlayer } from "../context/PlayerContext";
+import { CoverImage } from "./CoverImage";
+
+// Module-level RAM cache: survives full remounts (backup restore, HMR)
+// so capsules + featured classics never refetch twice in one session.
+let capsuleCache: TimeCapsuleShelf[] | null = null;
+let featuredCache: { items: any[]; total: number; title: string; query: string; page: number } | null = null;
 
 interface DiscoverViewProps {
   onCaptureAlbum: (album: Album) => void;
@@ -159,6 +165,9 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
       }
       setRecordings(items);
       setTotalResults(total);
+      if (title === "Featured Archival Classics") {
+        featuredCache = { items, total, title, query: queryStr, page };
+      }
     } catch (err) {
       console.error("Failed to load recordings:", err);
       setRecordings([]);
@@ -268,11 +277,24 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
     }
   };
 
-  // Featured classics on mount — the genre list is always visible, never empty.
-  // Featured jumps to a random page every visit (cheap range: deep Solr pages
-  // stall); capsules load staggered after, so the grid paints first.
+  // Featured classics on mount — served from RAM cache when present.
+  // Tab switches no longer remount (App keeps views hidden), so this runs
+  // once per session; the module cache covers full remounts too.
   useEffect(() => {
-    loadRecordings("", "Featured Archival Classics", { page: 1 + Math.floor(Math.random() * 12) });
+    if (featuredCache) {
+      setRecordings(featuredCache.items);
+      setTotalResults(featuredCache.total);
+      setSectionTitle(featuredCache.title);
+      setCurrentQuery(featuredCache.query);
+      setCurrentPage(featuredCache.page);
+    } else {
+      loadRecordings("", "Featured Archival Classics", { page: 1 + Math.floor(Math.random() * 12) });
+    }
+    if (capsuleCache) {
+      setCapsules(capsuleCache);
+      setCapsulesLoading(false);
+      return;
+    }
     try {
       const stored = Number(localStorage.getItem("archive_capsule_offset_v1") || "0") || 0;
       const off = stored % TIME_CAPSULES.length;
@@ -281,7 +303,10 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
     } catch { /* private mode — rotation rests on 0 */ }
     const timer = setTimeout(() => {
       fetchTimeCapsules(6)
-        .then(setCapsules)
+        .then((shelves) => {
+          capsuleCache = shelves;
+          setCapsules(shelves);
+        })
         .catch(() => setCapsules([]))
         .finally(() => setCapsulesLoading(false));
     }, 1200);
@@ -560,15 +585,11 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                         }`}
                       >
                         <div className="aspect-square rounded-xl overflow-hidden bg-stone-950 border border-stone-850 relative group-hover:shadow-md mb-2.5">
-                          <img
+                          <CoverImage
                             src={item.coverUrl}
                             alt={item.title}
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = "https://archive.org/images/notfound.png";
-                            }}
+                            className="w-full h-full"
+                            imgClassName="object-cover transition-transform duration-300 group-hover:scale-105"
                           />
                         </div>
                         <h3
@@ -789,11 +810,11 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     >
                       <div className="aspect-square rounded-xl overflow-hidden bg-stone-950 border border-stone-850 relative group-hover:shadow-md mb-2.5">
                         {item.coverUrl ? (
-                          <img
+                          <CoverImage
                             src={item.coverUrl}
                             alt={item.title}
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            loading="lazy"
+                            className="w-full h-full"
+                            imgClassName="object-cover transition-transform duration-300 group-hover:scale-105"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-stone-600">

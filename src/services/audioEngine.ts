@@ -1,5 +1,8 @@
 import { PlayerSettings } from "./playerSettings";
 export const EQ_FREQS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+// Tempo range: browser time-stretch keeps pitch natural across it.
+export const TEMPO_MIN = 0.5;
+export const TEMPO_MAX = 2.0;
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private src: MediaElementAudioSourceNode | null = null;
@@ -45,6 +48,14 @@ class AudioEngine {
     this.pan?.pan.setTargetAtTime(Math.max(-1, Math.min(1, s.stereoPan ?? 0)), t, 0.02);
   }
   getAnalyser() { return this.analyser; }
+  /** Tempo without pitch change: browser time-stretch, pitch preserved. */
+  setTempo(el: HTMLAudioElement, rate: number) {
+    const r = Math.max(TEMPO_MIN, Math.min(TEMPO_MAX, rate));
+    el.playbackRate = r;
+    try {
+      (el as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
+    } catch { /* older engines ignore */ }
+  }
   estimateBPM(): number | null {
     try {
       const a = this.analyser; if (!a) return null;

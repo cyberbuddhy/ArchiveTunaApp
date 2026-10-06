@@ -1,7 +1,6 @@
 import { AutocompleteItem, getLocalAutocompleteSuggestions } from "../data/popularArtists";
 import { getCachedAutocomplete, setCachedAutocomplete } from "./artistCache";
-
-const MB_USER_AGENT = "MusicVaultApp/1.0.0 (https://github.com/my-app/music-vault)";
+import { mbFetchJson, isStaleRequest } from "./mb";
 
 /**
  * Provides autocomplete items:
@@ -30,20 +29,16 @@ export async function fetchAutocompleteSuggestions(
     return localHits;
   }
 
-  // 2. Fetch supplemental artists from MusicBrainz in background
+  // 2. Fetch supplemental artists from MusicBrainz in background.
+  // Routed through the paced gateway (slot "autocomplete"): rapid keystrokes
+  // coalesce so only the latest query actually hits the network.
   try {
     const mbUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(
       clean
     )}*&fmt=json&limit=5`;
-    const res = await fetch(mbUrl, {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": MB_USER_AGENT,
-      },
-    });
+    const data: any = await mbFetchJson(mbUrl, { slot: "autocomplete" });
 
-    if (res.ok) {
-      const data = await res.json();
+    {
       const mbArtists: any[] = data.artists || [];
       const remoteHits: AutocompleteItem[] = mbArtists
         .filter((a) => a.name && !localHits.some((lh) => lh.name.toLowerCase() === a.name.toLowerCase()))
@@ -58,7 +53,7 @@ export async function fetchAutocompleteSuggestions(
       return merged;
     }
   } catch (err) {
-    console.warn("Autocomplete MusicBrainz warning:", err);
+    if (!isStaleRequest(err)) console.warn("Autocomplete MusicBrainz warning:", err);
   }
 
   setCachedAutocomplete(clean, localHits);

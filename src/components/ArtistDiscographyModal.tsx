@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { downloadAlbumZip } from "../utils/download";
 import { fetchArtistDiscography, fetchAlbumDetails, searchStreamsForRelease } from "../services/api";
+import { CoverImage } from "./CoverImage";
+import { isStaleRequest } from "../services/mb";
 import { getCachedDiscography } from "../services/artistCache";
 import { ArtistDiscographyData, OfficialRelease, ArchiveLiveTape, Album } from "../types";
 
@@ -106,7 +108,7 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
         }
       })
       .catch((err) => {
-        if (isMounted) {
+        if (isMounted && !isStaleRequest(err)) {
           setError(err.message || "Failed to load artist discography");
         }
       })
@@ -437,17 +439,11 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                               onClose();
                             }}
                           >
-                            <img
+                            <CoverImage
                               src={stream.coverUrl}
                               alt={stream.title}
-                              referrerPolicy="no-referrer"
-                              loading="lazy"
-                              decoding="async"
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src =
-                                  "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop&q=80";
-                              }}
+                              className="w-full h-full"
+                              imgClassName="object-cover"
                             />
                             <div className="absolute inset-0 bg-stone-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                               <Play className="w-5 h-5 text-amber-400 fill-amber-400" />
@@ -620,17 +616,11 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                             onClose();
                           }}
                         >
-                          <img
+                          <CoverImage
                             src={tape.coverUrl}
                             alt={tape.title}
-                            referrerPolicy="no-referrer"
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src =
-                                "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop&q=80";
-                            }}
+                            className="w-full h-full"
+                            imgClassName="object-cover group-hover:scale-105 transition-transform duration-200"
                           />
                         </div>
 
@@ -768,27 +758,15 @@ export const ArtistDiscographyModal: React.FC<ArtistDiscographyModalProps> = ({
                         {/* Cover image */}
                         <div className="relative aspect-square rounded-xl overflow-hidden bg-stone-950 border border-stone-800 mb-2.5 shadow-inner flex items-center justify-center">
                           {release.coverUrl ? (
-                            <img
+                            <CoverImage
                             src={release.coverUrl}
                             alt={release.title}
-                            referrerPolicy="no-referrer"
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = "none";
-                                const fallback = (e.target as HTMLElement).nextElementSibling;
-                                if (fallback) (fallback as HTMLElement).classList.remove("hidden");
-                              }}
+                            className="w-full h-full"
+                            imgClassName="object-cover group-hover:scale-105 transition-transform duration-300"
                             />
-                          ) : null}
-                          <div
-                            className={`w-full h-full items-center justify-center bg-stone-850 ${
-                              release.coverUrl ? "hidden" : "flex"
-                            }`}
-                          >
+                          ) : (
                             <Disc3 className="w-10 h-10 text-stone-600 group-hover:text-amber-400 transition-colors" />
-                          </div>
+                          )}
                         </div>
 
                         {/* Title & Metadata */}

@@ -11,7 +11,8 @@ const albumDetailsMemoryCache = new Map<string, Album>();
 
 // Cache namespace — bump to invalidate stale entries app-wide after query
 // builder fixes (stale empties otherwise survive the whole tab session).
-const CACHE_VERSION = "v2";
+// v3: MusicBrainz-failure empties are no longer cached; drop poisoned v2 rows.
+const CACHE_VERSION = "v3";
 function getFromSession<T>(key: string): T | null {  try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;

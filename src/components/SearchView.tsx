@@ -23,6 +23,7 @@ import {
   Heart,
 } from "lucide-react";
 import { downloadAlbumZip } from "../utils/download";
+import { CoverImage } from "./CoverImage";
 import {
   Album,
   ListenHistoryItem,
@@ -1068,14 +1069,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
             >
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-stone-800 shrink-0 border-2 border-stone-800 group-hover:border-amber-400 transition-colors flex items-center justify-center">
                 {matchedArtists[0].coverUrl ? (
-                  <img
+                  <CoverImage
                     src={matchedArtists[0].coverUrl}
                     alt={matchedArtists[0].name}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = "none";
-                    }}
+                    className="w-full h-full"
+                    imgClassName="object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 ) : (
                   <User className="w-8 h-8 text-stone-500 group-hover:text-amber-400 transition-colors pointer-events-none" />
@@ -1115,14 +1113,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
                 title={`Open ${c.album}`}
               >
                 <div className="relative aspect-square rounded-lg overflow-hidden bg-stone-900 border border-stone-800 mb-1.5">
-                  <img
+                  <CoverImage
                     src={`https://archive.org/services/img/${c.albumId}`}
                     alt={c.album}
-                    loading="lazy"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
+                    className="w-full h-full"
+                    imgClassName="object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                   {openingAlbumId === c.albumId && (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
@@ -1227,19 +1222,14 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   }}
                   className="group bg-stone-900/50 hover:bg-stone-900 border border-amber-500/40 hover:border-amber-400 rounded-2xl p-3 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
                 >
-                  <div className="relative aspect-square rounded-xl overflow-hidden bg-stone-950 border-2 border-amber-400 mb-2.5 shadow-inner surprise-flash">
-                    <img
-                      src="rickroll.gif"
-                      alt="Rick Astley dancing"
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src =
-                          "https://archive.org/images/notfound.png";
-                      }}
-                    />
-                  </div>
+                    <div className="relative aspect-square rounded-xl overflow-hidden bg-stone-950 border-2 border-amber-400 mb-2.5 shadow-inner surprise-flash">
+                      <CoverImage
+                        src="rickroll.gif"
+                        alt="Rick Astley dancing"
+                        className="w-full h-full"
+                        imgClassName="object-cover"
+                      />
+                    </div>
                   <div className="space-y-0.5">
                     <h4
                       className="text-xs font-semibold text-stone-100 group-hover:text-amber-400 transition-colors line-clamp-1"
@@ -1271,20 +1261,14 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   >
                     {/* Album / Item Cover Art */}
                     <div className="relative aspect-square rounded-xl overflow-hidden bg-stone-950 border border-stone-800 mb-2.5 shadow-inner">
-                      <img
+                      <CoverImage
                         src={
                           item.coverUrl ||
                           `https://archive.org/services/img/${item.identifier}`
                         }
                         alt={item.title}
-                        referrerPolicy="no-referrer"
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src =
-                            "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=80";
-                        }}
+                        className="w-full h-full"
+                        imgClassName="object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     </div>
 

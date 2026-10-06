@@ -37,6 +37,7 @@ import { linkForPlaylist, linkForSong } from "../services/share";
 import { currentLyricIndex, fetchLyrics, LyricsResult } from "../services/lyrics";
 import { downloadAlbumZip, downloadTrackAudio } from "../utils/download";
 import { TierListView } from "./TierListView";
+import { CoverImage } from "./CoverImage";
 import { LocalLibraryTab } from "./LocalLibraryTab";
 import { TIER_CONFIG } from "../utils/tierList";
 import { offlineCache, CachedAudioItem } from "../services/offlineCache";
@@ -126,6 +127,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [offlineInnerTab, setOfflineInnerTab] = useState<"cached" | "local">("cached");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [playlistMenuTrackId, setPlaylistMenuTrackId] = useState<string | null>(null);
+  const [playlistMenuPos, setPlaylistMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [popupPlaylistName, setPopupPlaylistName] = useState("");
   // Overflow (⋮) menu for playlist + all-songs rows — viewport-anchored so it
   // never clips inside scrollable containers. `context` tells the shared
   // menu which actions apply (playlist rows can reorder/remove).
@@ -1235,7 +1238,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         title="Play offline track"
                       >
                         {albumCover ? (
-                          <img src={albumCover} alt={item.title} className="w-full h-full object-cover" />
+                          <CoverImage src={albumCover} alt={item.title} className="w-full h-full" imgClassName="object-cover" />
                         ) : (
                           <Music className="w-3.5 h-3.5 text-stone-400" />
                         )}
@@ -1341,15 +1344,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 >
                   {/* Clean Album Cover Art - No icons on top of the cover art */}
                   <div className="relative aspect-square rounded-lg overflow-hidden bg-stone-950 border border-stone-800">
-                    <img
-                      src={album.coverUrl || "https://archive.org/images/notfound.png"}
+                    <CoverImage
+                      src={album.coverUrl}
                       alt={album.title}
-                      loading="lazy"
-                      decoding="async"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = "https://archive.org/images/notfound.png";
-                      }}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                      className="w-full h-full"
+                      imgClassName="object-cover group-hover:scale-105 transition-transform duration-200"
                     />
                   </div>
 
@@ -1780,12 +1779,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         title="Play track"
                       >
                         {album.coverUrl ? (
-                          <img
+                          <CoverImage
                             src={album.coverUrl}
                             alt={album.title}
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full object-cover"
+                            className="w-full h-full"
+                            imgClassName="object-cover"
                           />
                         ) : (
                           <Music className="w-3.5 h-3.5 text-stone-400" />
@@ -1829,8 +1827,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         <Heart className={`w-4 h-4 ${loved ? "fill-rose-500" : ""}`} />
                       </button>
 
-                      {/* Overflow menu + Add to Playlist popup */}
-                      <div className="relative">
+                      {/* Overflow menu trigger — popup is viewport-anchored global (see bottom) */}
+                      <div>
                         <button
                           onClick={(e) => openSongMenu(e, `songs_${track.id}_${idx}`, track, "songs", -1, album)}
                           aria-label={`More options for ${track.title}`}
@@ -1839,34 +1837,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         >
                           <MoreVertical className="w-4 h-4" />
                         </button>
-
-                        {playlistMenuTrackId === track.id && (
-                          <div
-                            className="absolute right-0 bottom-full mb-1 w-52 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-1.5 z-30 space-y-0.5"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <p className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500 px-2.5 py-1">
-                              Add to playlist
-                            </p>
-                            {playlists.length === 0 ? (
-                              <p className="text-[11px] text-stone-500 px-2.5 py-1">No playlists yet</p>
-                            ) : (
-                              playlists.map((pl) => (
-                                <button
-                                  key={pl.id}
-                                  onClick={() => {
-                                    onAddTrackToPlaylist(pl.id, track);
-                                    setPlaylistMenuTrackId(null);
-                                  }}
-                                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-stone-300 hover:bg-stone-800 flex items-center justify-between transition-colors"
-                                >
-                                  <span className="truncate">{pl.name}</span>
-                                  <Plus className="w-3 h-3 text-amber-400 shrink-0" />
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -1923,16 +1893,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   {/* Circular Artist Avatar — clean image, colored ring border only */}
                   <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-stone-950 border-2 border-stone-800 group-hover:border-amber-400 transition-colors mb-3 flex items-center justify-center shadow-inner">
                     {artist.coverUrl ? (
-                      <img
+                      <CoverImage
                         src={artist.coverUrl}
                         alt={artist.name}
-                        referrerPolicy="no-referrer"
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = "none";
-                        }}
+                        className="w-full h-full"
+                        imgClassName="object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     ) : (
                       <User className="w-10 h-10 text-stone-600 group-hover:text-amber-400 transition-colors pointer-events-none" />
@@ -2033,6 +1998,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 type="button"
                 onClick={() => {
                   setPlaylistMenuTrackId(songMenu.track.id);
+                  setPlaylistMenuPos({ top: songMenu.top, left: songMenu.left });
+                  setPopupPlaylistName("");
                   setSongMenu(null);
                 }}
                 className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-stone-800 text-stone-200 flex items-center gap-2.5 text-xs cursor-pointer transition-colors"
@@ -2080,6 +2047,84 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 </button>
               </>
             )}
+          </div>
+        </>
+      )}
+
+      {/* Add to Playlist popup — viewport-anchored global, never clipped */}
+      {playlistMenuTrackId && playlistMenuPos && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => {
+              setPlaylistMenuTrackId(null);
+              setPlaylistMenuPos(null);
+            }}
+          />
+          <div
+            className="fixed z-50 w-56 bg-stone-950 border border-stone-800 rounded-xl shadow-2xl p-2 space-y-1.5"
+            style={{ top: playlistMenuPos.top, left: playlistMenuPos.left }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[11px] uppercase tracking-[0.12em] font-semibold text-stone-500 px-2 py-0.5">
+              Add to Playlist
+            </p>
+            <div className="max-h-44 overflow-y-auto space-y-1">
+              {playlists.length === 0 ? (
+                <p className="text-[11px] text-stone-500 px-2 py-1">No playlists yet — create one below</p>
+              ) : (
+                playlists.map((pl) => (
+                  <button
+                    key={pl.id}
+                    onClick={() => {
+                      const hit = allSongs.find(({ track }) => track.id === playlistMenuTrackId);
+                      if (hit) onAddTrackToPlaylist(pl.id, hit.track);
+                      setPlaylistMenuTrackId(null);
+                      setPlaylistMenuPos(null);
+                    }}
+                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-stone-900 text-stone-200 hover:text-amber-400 flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                  >
+                    <span className="truncate font-medium text-xs">{pl.name}</span>
+                    <Plus className="w-3 h-3 text-amber-400 shrink-0" />
+                  </button>
+                ))
+              )}
+            </div>
+            <form
+              onSubmit={(ev) => {
+                ev.preventDefault();
+                const name = popupPlaylistName.trim();
+                if (!name) return;
+                const created = onCreatePlaylist?.(name) as Playlist | void;
+                const id =
+                  created && typeof created === "object"
+                    ? created.id
+                    : playlists.find((p) => p.name === name)?.id;
+                const hit = allSongs.find(({ track }) => track.id === playlistMenuTrackId);
+                if (id && hit) {
+                  onAddTrackToPlaylist(id, hit.track);
+                  setPlaylistMenuTrackId(null);
+                  setPlaylistMenuPos(null);
+                  setPopupPlaylistName("");
+                }
+              }}
+              className="flex items-center gap-1.5 pt-1 border-t border-stone-800/80"
+            >
+              <input
+                value={popupPlaylistName}
+                onChange={(e) => setPopupPlaylistName(e.target.value)}
+                placeholder="New playlist…"
+                className="flex-1 min-w-0 bg-stone-900 border border-stone-800 rounded-lg px-2 py-1.5 text-xs text-stone-200 placeholder:text-stone-600 outline-none focus:border-amber-500/50"
+              />
+              <button
+                type="submit"
+                disabled={!newPlaylistName.trim()}
+                className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 transition-colors disabled:opacity-30 cursor-pointer"
+                title="Create and add"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </form>
           </div>
         </>
       )}

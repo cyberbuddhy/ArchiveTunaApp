@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { X, DownloadCloud, Music, AlertCircle, CheckCircle2, Loader2, Link2, ExternalLink } from "lucide-react";
 import { ingestUrl, IngestQuality } from "../services/ingest";
 import { Album } from "../types";
+import { CoverImage } from "./CoverImage";
 
 interface CaptureModalProps {
   isOpen: boolean;
@@ -151,13 +152,12 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
           {previewAlbum && (
             <div className="p-4 rounded-xl bg-stone-950 border border-stone-800 space-y-4">
               <div className="flex space-x-4">
-                <img
-                  src={previewAlbum.coverUrl || "https://archive.org/images/notfound.png"}
+                <CoverImage
+                  src={previewAlbum.coverUrl}
                   alt={previewAlbum.title}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = "https://archive.org/images/notfound.png";
-                  }}
-                  className="w-20 h-20 rounded-lg object-cover bg-stone-800 border border-stone-800 shrink-0"
+                  eager
+                  className="w-20 h-20 rounded-lg bg-stone-800 border border-stone-800 shrink-0"
+                  imgClassName="object-cover"
                 />
                 <div className="min-w-0 flex-1">
                   <span className="inline-block px-2 py-0.5 rounded-full text-[11px] uppercase tracking-[0.12em] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-1">

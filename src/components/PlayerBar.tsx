@@ -37,6 +37,7 @@ import { offlineCache } from "../services/offlineCache";
 import { linkForSong } from "../services/share";
 import { currentLyricIndex, fetchLyrics, LyricsResult } from "../services/lyrics";
 import { Waveform } from "./Waveform";
+import { CoverImage } from "./CoverImage";
 import { formatTime } from "../utils/format";
 import { getStoredPlayerSettings, savePlayerSettings } from "../services/playerSettings";
 
@@ -531,14 +532,13 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               className="w-64 h-64 sm:w-72 sm:h-72 rounded-2xl overflow-hidden bg-stone-900 border border-stone-800 shadow-[0_15px_40px_rgba(0,0,0,0.8)] relative group cursor-pointer"
             >
               {activeCoverUrl ? (
-                <img
+                <CoverImage
                   key={activeCoverUrl}
                   src={activeCoverUrl}
                   alt={currentTrack.title}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                  }}
+                  eager
+                  className="w-full h-full"
+                  imgClassName="object-cover"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-stone-900 text-stone-600">
@@ -783,14 +783,13 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           >
             <div className="w-10 h-10 rounded-lg overflow-hidden bg-stone-950 border border-stone-800 shrink-0">
               {activeCoverUrl ? (
-                <img
+                <CoverImage
                   key={activeCoverUrl}
                   src={activeCoverUrl}
                   alt={currentTrack.title}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                  }}
+                  eager
+                  className="w-full h-full"
+                  imgClassName="object-cover"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-stone-600">
@@ -1178,14 +1177,13 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               title="Click to view album menu & tracks"
             >
               {activeCoverUrl ? (
-                <img
+                <CoverImage
                   key={activeCoverUrl}
                   src={activeCoverUrl}
                   alt={currentTrack.title}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                  }}
-                  className="w-full h-full object-cover group-hover/art:scale-105 transition-transform duration-300"
+                  eager
+                  className="w-full h-full"
+                  imgClassName="object-cover group-hover/art:scale-105 transition-transform duration-300"
                 />
               ) : (
                 <Disc3 className="w-6 h-6 text-stone-500 group-hover/art:text-amber-400 transition-colors" />

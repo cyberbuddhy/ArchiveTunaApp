@@ -1,5 +1,11 @@
 import { Album, DiscoveryResponse, ArtistDiscographyData, MatchedArtist, ArchiveLiveTape } from "../types";
 import {
+  mbFetchJson,
+  mbSearchArtists,
+  mbBrowseAllReleaseGroups,
+  isStaleRequest,
+} from "./mb";
+import {
   getCachedArtistSearch,
   setCachedArtistSearch,
   getCachedDiscography,
@@ -579,12 +585,8 @@ export async function searchArtists(query: string): Promise<MatchedArtist[]> {
   if (cached) return cached;
 
   try {
-    const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(
-      cleanQuery
-    )}&fmt=json`;
-    const mbData = await fetchArchiveJson(mbSearchUrl);
+    const rawArtists = await mbSearchArtists(cleanQuery, 10);
 
-    const rawArtists = mbData.artists || [];
     if (rawArtists.length === 0) return [];
 
     // Filter relevant artists
@@ -598,24 +600,28 @@ export async function searchArtists(query: string): Promise<MatchedArtist[]> {
 
     if (relevant.length === 0) return [];
 
-    // Map into MatchedArtist and fetch top release group artwork for the top matches
+    // Map into MatchedArtist and fetch release-group artwork for the top
+    // match only — each cover lookup is a MusicBrainz request under the
+    // anonymous quota, so fan-out here starves discography loads.
     const matched: MatchedArtist[] = await Promise.all(
       relevant.map(async (a: any, idx: number) => {
         let coverUrl: string | undefined;
 
-        // Fetch top release-group cover for the first 2 artists
-        if (idx < 2 && a.id) {
+        // Fetch top release-group cover for the top artist only
+        if (idx < 1 && a.id) {
           try {
             const rgUrl = `https://musicbrainz.org/ws/2/release-group?artist=${encodeURIComponent(
               a.id
             )}&limit=1&fmt=json`;
-            const rgData = await fetchArchiveJson(rgUrl);
+            const rgData = await mbFetchJson(rgUrl, { slot: "artist-search" });
             const rgs = rgData["release-groups"] || [];
             if (rgs.length > 0 && rgs[0].id) {
               coverUrl = `https://coverartarchive.org/release-group/${rgs[0].id}/front-250`;
             }
-          } catch {
-            // non-fatal
+          } catch (err) {
+            if (!isStaleRequest(err)) {
+              // non-fatal
+            }
           }
         }
 
@@ -649,7 +655,7 @@ export async function searchArtists(query: string): Promise<MatchedArtist[]> {
     setCachedArtistSearch(cleanQuery, matched);
     return matched;
   } catch (err) {
-    console.warn("Artist search error:", err);
+    if (!isStaleRequest(err)) console.warn("Artist search error:", err);
     return [];
   }
 }
@@ -750,6 +756,81 @@ export async function searchStreamsForRelease(
   }
 }
 
+export interface CategorizedReleases {
+  officialAlbums: any[];
+  officialEPs: any[];
+  officialSingles: any[];
+  officialLiveReleases: any[];
+  officialOther: any[];
+}
+
+/**
+ * Pure bucketing of MusicBrainz release groups into official catalog tabs.
+ * Bootlegs/interviews never pollute studio tabs; live/compilation/remix
+ * pressings route to their own shelves. Exported for regression tests.
+ */
+export function categorizeReleaseGroups(releaseGroups: any[]): CategorizedReleases {
+  const officialAlbums: any[] = [];
+  const officialEPs: any[] = [];
+  const officialSingles: any[] = [];
+  const officialLiveReleases: any[] = [];
+  const officialOther: any[] = [];
+
+  for (const rg of releaseGroups) {
+    const pType = rg["primary-type"] || "Album";
+    const sTypes: string[] = rg["secondary-types"] || [];
+    const lowerTitle = (rg.title || "").toLowerCase();
+
+    // Strictly exclude bootlegs, interviews, and spoken word from studio/official catalog
+    const isBootlegOrUnofficial =
+      sTypes.some((st: string) => ["bootleg", "interview", "spokenword", "audiobook", "demo", "promo"].includes(st.toLowerCase())) ||
+      lowerTitle.includes("bootleg") ||
+      lowerTitle.includes("unauthorized") ||
+      lowerTitle.includes("interview");
+
+    const isLive = sTypes.includes("Live") || pType === "Broadcast" || lowerTitle.includes("live at") || lowerTitle.includes("in concert");
+    const isCompilation = sTypes.includes("Compilation") || sTypes.includes("Remix") || sTypes.includes("Soundtrack") || sTypes.includes("Boxset") || lowerTitle.includes("greatest hits") || lowerTitle.includes("best of");
+    const title = rg.title || "Untitled";
+    const year = rg["first-release-date"] ? String(rg["first-release-date"]).substring(0, 4) : "";
+
+    const item = {
+      id: rg.id,
+      title,
+      primaryType: pType,
+      secondaryTypes: sTypes,
+      firstReleaseDate: rg["first-release-date"] || "",
+      year,
+      coverUrl: `https://coverartarchive.org/release-group/${rg.id}/front-250`,
+    };
+
+    if (isLive) {
+      if (!isBootlegOrUnofficial) {
+        officialLiveReleases.push(item);
+      }
+    } else if (pType === "Album") {
+      if (isCompilation) {
+        if (!isBootlegOrUnofficial) officialOther.push(item);
+      } else if (!isBootlegOrUnofficial) {
+        officialAlbums.push(item);
+      }
+    } else if (pType === "EP") {
+      if (!isBootlegOrUnofficial) officialEPs.push(item);
+    } else if (pType === "Single") {
+      if (!isBootlegOrUnofficial) officialSingles.push(item);
+    } else if (isCompilation && !isBootlegOrUnofficial) {
+      officialOther.push(item);
+    }
+  }
+
+  officialAlbums.sort((a, b) => (b.firstReleaseDate || "").localeCompare(a.firstReleaseDate || ""));
+  officialEPs.sort((a, b) => (b.firstReleaseDate || "").localeCompare(a.firstReleaseDate || ""));
+  officialSingles.sort((a, b) => (b.firstReleaseDate || "").localeCompare(a.firstReleaseDate || ""));
+  officialLiveReleases.sort((a, b) => (b.firstReleaseDate || "").localeCompare(a.firstReleaseDate || ""));
+  officialOther.sort((a, b) => (b.firstReleaseDate || "").localeCompare(a.firstReleaseDate || ""));
+
+  return { officialAlbums, officialEPs, officialSingles, officialLiveReleases, officialOther };
+}
+
 export async function fetchArtistDiscography(artistName: string): Promise<ArtistDiscographyData> {
   const cleanName = artistName.trim();
   if (!cleanName) throw new Error("Artist name is required");
@@ -758,22 +839,21 @@ export async function fetchArtistDiscography(artistName: string): Promise<Artist
   if (cached) return cached;
 
   // MusicBrainz official catalog and Archive.org live tapes are independent
-  // sources — fetch concurrently instead of sequentially.
-  const fetchOfficial: Promise<{ mbArtist: any; releaseGroups: any[] }> = (async () => {
+  // sources — fetch concurrently instead of sequentially. All MusicBrainz
+  // traffic runs through the paced gateway (retries + stale coalescing).
+  const fetchOfficial: Promise<{ mbArtist: any; releaseGroups: any[]; mbFailed: boolean }> = (async () => {
     try {
-      const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(cleanName)}&fmt=json`;
-      const mbData = await fetchArchiveJson(mbSearchUrl);
-      const artists = mbData.artists || [];
-      if (artists.length === 0) return { mbArtist: null, releaseGroups: [] };
+      const artists = await mbSearchArtists(cleanName, 10);
+      if (artists.length === 0) return { mbArtist: null, releaseGroups: [], mbFailed: false };
       const found =
         artists.find((a: any) => a.name.toLowerCase() === cleanName.toLowerCase()) || artists[0];
-      if (!found?.id) return { mbArtist: found ?? null, releaseGroups: [] };
-      const rgUrl = `https://musicbrainz.org/ws/2/release-group?artist=${encodeURIComponent(found.id)}&limit=100&fmt=json`;
-      const rgData = await fetchArchiveJson(rgUrl);
-      return { mbArtist: found, releaseGroups: rgData["release-groups"] || [] };
+      if (!found?.id) return { mbArtist: found ?? null, releaseGroups: [], mbFailed: false };
+      const { groups } = await mbBrowseAllReleaseGroups(found.id, { slot: "discography" });
+      return { mbArtist: found, releaseGroups: groups, mbFailed: false };
     } catch (err) {
+      if (isStaleRequest(err)) throw err;
       console.warn("MusicBrainz query warning:", err);
-      return { mbArtist: null, releaseGroups: [] };
+      return { mbArtist: null, releaseGroups: [], mbFailed: true };
     }
   })();
 
@@ -839,65 +919,10 @@ export async function fetchArtistDiscography(artistName: string): Promise<Artist
   })();
 
   const [official] = await Promise.all([fetchOfficial, fetchLive]);
-  const { mbArtist, releaseGroups } = official;
+  const { mbArtist, releaseGroups, mbFailed } = official;
 
-  const officialAlbums: any[] = [];
-  const officialEPs: any[] = [];
-  const officialSingles: any[] = [];
-  const officialLiveReleases: any[] = [];
-  const officialOther: any[] = [];
-
-  for (const rg of releaseGroups) {
-    const pType = rg["primary-type"] || "Album";
-    const sTypes: string[] = rg["secondary-types"] || [];
-    const lowerTitle = (rg.title || "").toLowerCase();
-
-    // Strictly exclude bootlegs, interviews, and spoken word from studio/official catalog
-    const isBootlegOrUnofficial =
-      sTypes.some((st: string) => ["bootleg", "interview", "spokenword", "audiobook", "demo", "promo"].includes(st.toLowerCase())) ||
-      lowerTitle.includes("bootleg") ||
-      lowerTitle.includes("unauthorized") ||
-      lowerTitle.includes("interview");
-
-    const isLive = sTypes.includes("Live") || pType === "Broadcast" || lowerTitle.includes("live at") || lowerTitle.includes("in concert");
-    const isCompilation = sTypes.includes("Compilation") || sTypes.includes("Remix") || sTypes.includes("Soundtrack") || sTypes.includes("Boxset") || lowerTitle.includes("greatest hits") || lowerTitle.includes("best of");
-    const title = rg.title || "Untitled";
-    const year = rg["first-release-date"] ? String(rg["first-release-date"]).substring(0, 4) : "";
-
-    const item = {
-      id: rg.id,
-      title,
-      primaryType: pType,
-      secondaryTypes: sTypes,
-      firstReleaseDate: rg["first-release-date"] || "",
-      year,
-      coverUrl: `https://coverartarchive.org/release-group/${rg.id}/front-250`,
-    };
-
-    if (isLive) {
-      if (!isBootlegOrUnofficial) {
-        officialLiveReleases.push(item);
-      }
-    } else if (pType === "Album") {
-      if (isCompilation) {
-        if (!isBootlegOrUnofficial) officialOther.push(item);
-      } else if (!isBootlegOrUnofficial) {
-        officialAlbums.push(item);
-      }
-    } else if (pType === "EP") {
-      if (!isBootlegOrUnofficial) officialEPs.push(item);
-    } else if (pType === "Single") {
-      if (!isBootlegOrUnofficial) officialSingles.push(item);
-    } else if (isCompilation && !isBootlegOrUnofficial) {
-      officialOther.push(item);
-    }
-  }
-
-  officialAlbums.sort((a, b) => (b.firstReleaseDate || "").localeCompare(a.firstReleaseDate || ""));
-  officialEPs.sort((a, b) => (b.firstReleaseDate || "").localeCompare(a.firstReleaseDate || ""));
-  officialSingles.sort((a, b) => (b.firstReleaseDate || "").localeCompare(a.firstReleaseDate || ""));
-  officialLiveReleases.sort((a, b) => (b.firstReleaseDate || "").localeCompare(a.firstReleaseDate || ""));
-  officialOther.sort((a, b) => (b.firstReleaseDate || "").localeCompare(a.firstReleaseDate || ""));
+  const { officialAlbums, officialEPs, officialSingles, officialLiveReleases, officialOther } =
+    categorizeReleaseGroups(releaseGroups);
 
   const formattedArtist = mbArtist ? {
     id: mbArtist.id,
@@ -929,9 +954,11 @@ export async function fetchArtistDiscography(artistName: string): Promise<Artist
     totalLiveTapes,
   };
 
-  // Never cache empties: a failed fetch must stay retryable instead of
-  // haunting the whole tab session as a stale zero-result entry.
-  if (releaseGroups.length > 0 || totalLiveTapes > 0) {
+  // Never cache empties or MusicBrainz failures: a rate-limited MB call
+  // returns zero release groups, and caching that poisons the session
+  // (memory + sessionStorage) so officials stay missing until tab close.
+  // Failed MB stays retryable on next open; live tapes refetch cheaply.
+  if (!mbFailed && (releaseGroups.length > 0 || totalLiveTapes > 0)) {
     setCachedDiscography(cleanName, discographyResult);
   }
   return discographyResult;
